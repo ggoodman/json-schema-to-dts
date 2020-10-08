@@ -1,0 +1,34 @@
+{
+  "compilerOptions": {
+    "allowSyntheticDefaultImports": true,
+    "alwaysStrict": true,
+    "declaration": true,
+    "declarationMap": true,
+    "diagnostics": true,
+    "downlevelIteration": true,
+    "esModuleInterop": true,
+    "importHelpers": true,
+    "incremental": true,
+    "lib": [
+      "esnext"
+    ],
+    "module": "CommonJS",
+    "moduleResolution": "Node",
+    "outDir": "./dist",
+    "pretty": true,
+    "resolveJsonModule": true,
+    "sourceMap": true,
+    "strict": true,
+    "target": "ES2018"
+  },
+  "include": [
+    "src",
+    "types"
+  ],
+  "files": [
+    "src/index.ts",
+    "./src/assertion/IAssertionProvider.ts",
+    "./src/assertion/IAssertion.ts",
+    "./src/assertion/IAssertionProviderContext.ts"
+  ]
+}
