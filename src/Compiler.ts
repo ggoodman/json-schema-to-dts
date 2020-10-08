@@ -2,22 +2,26 @@ import { JSONSchema7 } from 'json-schema';
 import { IndentationText, Project } from 'ts-morph';
 import { URL } from 'url';
 import { AssertionProviderContext } from './AssertionProviderContext';
-import { IAssertion } from './IAssertion';
 import { AllOfAssertionProvider } from './providers/AllOfAssertionProvider';
 import { AnyOfAssertionProvider } from './providers/AnyOfAssertionProvider';
+import { ConstAssertionProvider } from './providers/ConstAssertionProvider';
 import { DescriptionAssertionProvider } from './providers/DescriptionAssertionProvider';
 import { EnumAssertionProvider } from './providers/EnumAssertionProvider';
 import { OneOfAssertionProvider } from './providers/OneOfAssertionProvider';
 import { RefAssertionProvider } from './providers/RefAssertionProvider';
 import { TypeAssertionProvider } from './providers/TypeAssertionProvider';
 
-interface SchemaMetadata {
-  name?: string;
+export enum ExportKind {
+  Declaration = 'Declaration',
+  Export = 'Export',
+}
+
+interface CompileOptions {
+  exportKind?: ExportKind;
 }
 
 export class Compiler {
-  private readonly schemas = new Map<string, JSONSchema7>();
-  private readonly schemaMetadata = new Map<JSONSchema7, SchemaMetadata>();
+  private readonly schemaByUri = new Map<string, JSONSchema7>();
   private readonly schemaByName = new Map<string, JSONSchema7>();
 
   addSchema(schema: JSONSchema7, uri?: string) {
@@ -58,30 +62,12 @@ export class Compiler {
       }
     }
 
-    this.schemas.set(schema.$id, schema);
+    this.schemaByUri.set(schema.$id, schema);
     this.schemaByName.set(name, schema);
-    this.schemaMetadata.set(schema, { name });
   }
 
-  getSchema(uri: string) {
-    return this.schemas.get(uri);
-  }
-
-  getSchemaMetadata(ref: string | JSONSchema7) {
-    if (typeof ref === 'string') {
-      const schema = this.schemas.get(ref);
-
-      if (!schema) {
-        return;
-      }
-
-      ref = schema;
-    }
-
-    return this.schemaMetadata.get(ref);
-  }
-
-  compile() {
+  compile(options: CompileOptions = {}) {
+    const exportKind = options.exportKind || ExportKind.Export;
     const project = new Project({
       useInMemoryFileSystem: true,
       manipulationSettings: {
@@ -93,41 +79,19 @@ export class Compiler {
       assertionProviders: [
         new AllOfAssertionProvider(),
         new AnyOfAssertionProvider(),
+        new ConstAssertionProvider(),
         new DescriptionAssertionProvider(),
         new EnumAssertionProvider(),
         new OneOfAssertionProvider(),
         new RefAssertionProvider(),
         new TypeAssertionProvider(),
       ],
-      schemaByUri: this.schemas,
+      schemaByUri: this.schemaByUri,
       uri: '#',
     });
-    const assertionsByUri = new Map<string, IAssertion>();
-    const usedNames = new Set();
-
-    const generateDeconflictedName = (baseName: string) => {
-      if (!usedNames.has(baseName)) {
-        usedNames.add(baseName);
-        return baseName;
-      }
-
-      let suffix = 0;
-
-      while (true) {
-        const name = `${baseName}${suffix}`;
-
-        if (!usedNames.has(name)) {
-          usedNames.add(name);
-          return name;
-        }
-
-        suffix++;
-      }
-    };
-
     const exportedNames = new Set<string>();
 
-    for (const [uri, schema] of this.schemas) {
+    for (const [uri, schema] of this.schemaByUri) {
       const name = context.generateDeconflictedName(schema, { uri });
 
       context.provideAssertionForSchema(schema, { uri });
@@ -140,13 +104,14 @@ export class Compiler {
         sourceFile.addTypeAlias({
           name,
           type: assertion.typeWriter,
-          isExported: exportedNames.has(name),
+          isExported: exportKind === ExportKind.Export && exportedNames.has(name),
+          hasDeclareKeyword: exportKind === ExportKind.Declaration && exportedNames.has(name),
+          docs: assertion.docsWriter ? [{ description: assertion.docsWriter }] : undefined,
         });
       }
     }
 
     return {
-      assertionsByUri,
       diagnostics: context.diagnostics,
       typeDefinitions: sourceFile.print(),
     };

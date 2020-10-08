@@ -4,12 +4,14 @@ import { IAssertion } from '../IAssertion';
 import { ITypeCreator } from '../ITypeCreator';
 
 interface BaseAssertionOptions {
+  docsWriter?: WriterFunction;
   typeWriter?: WriterFunction;
 }
 
 export abstract class BaseAssertion implements IAssertion {
   readonly consumesProperties: ReadonlySet<keyof JSONSchema7>;
   readonly name: string;
+  readonly docsWriter?: WriterFunction;
   readonly typeWriter?: WriterFunction;
 
   constructor(
@@ -19,6 +21,7 @@ export abstract class BaseAssertion implements IAssertion {
   ) {
     this.consumesProperties = new Set(consumesProperties);
     this.name = name;
+    this.docsWriter = options.docsWriter;
     this.typeWriter = options.typeWriter;
   }
 

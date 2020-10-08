@@ -23,6 +23,9 @@ export class SchemaAssertion extends BaseAssertion {
     }
 
     super(SchemaAssertion.name, [...consumedProperties], {
+      docsWriter: schema.description
+        ? (writer) => writer.writeLine(schema.description!)
+        : undefined,
       typeWriter:
         writers.length > 1
           ? (writer) => {

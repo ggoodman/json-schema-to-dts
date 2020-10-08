@@ -33,6 +33,54 @@ function compileMany(
 }
 
 describe('Compiler', () => {
+  describe('comments', () => {
+    it('will inject schema-level comments', () => {
+      const result = compile(
+        {
+          description: 'Hello world!',
+          enum: ['hello', 'world'],
+        },
+        'file:///test.json'
+      );
+
+      expect(result.typeDefinitions).toMatchInlineSnapshot(`
+        "/**
+         * Hello world!
+         *
+         */
+        export type test = (\\"hello\\" | \\"world\\");
+        "
+      `);
+    });
+
+    it('will inject property-level comments', () => {
+      const result = compile(
+        {
+          type: 'object',
+          properties: {
+            hello: {
+              description: 'Hello world!',
+              const: 'world',
+            },
+          },
+          additionalProperties: false,
+        },
+        'file:///test.json'
+      );
+
+      expect(result.typeDefinitions).toMatchInlineSnapshot(`
+        "export type test = {
+            /**
+             * Hello world!
+             *
+             */
+            hello: \\"world\\";
+        };
+        "
+      `);
+    });
+  });
+
   describe('type=enum', () => {
     it('minimal schema', () => {
       const result = compile(

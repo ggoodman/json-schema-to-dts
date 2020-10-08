@@ -22,6 +22,9 @@ export class ObjectTypeAssertion extends BaseAssertion {
 
     if (options.additionalPropertyAssertion) {
       structure.indexSignatures.push({
+        docs: options.additionalPropertyAssertion.docsWriter && [
+          { description: options.additionalPropertyAssertion.docsWriter },
+        ],
         keyName: 'additionalProperties',
         keyType: 'string',
         returnType: options.additionalPropertyAssertion.typeWriter,
@@ -33,6 +36,7 @@ export class ObjectTypeAssertion extends BaseAssertion {
         const assertion = options.knownPropertyAssertions[propertyName];
 
         structure.properties.push({
+          docs: assertion.docsWriter && [{ description: assertion.docsWriter }],
           name: propertyName,
           type: assertion.typeWriter || ((writer) => writer.write('any')),
           hasQuestionToken: options.requiredProperties.includes(propertyName),
@@ -47,9 +51,9 @@ export class ObjectTypeAssertion extends BaseAssertion {
         const assertion = options.knownPropertyAssertions[propertyName];
 
         structure.indexSignatures.push({
+          docs: assertion.docsWriter && [{ description: assertion.docsWriter }],
           keyName: `patternProperty${i++}`,
           keyType: 'string',
-          docs: [`Pattern ${propertyName}`],
           returnType: assertion.typeWriter || ((writer) => writer.write('any')),
         });
       }
@@ -83,7 +87,4 @@ export class ObjectTypeAssertion extends BaseAssertion {
       }
     );
   }
-
-  // provideTypes(typeCreator: ITypeCreator): void {
-  // }
 }
