@@ -5,7 +5,6 @@ import { AssertionProviderContext } from './AssertionProviderContext';
 import { AllOfAssertionProvider } from './providers/AllOfAssertionProvider';
 import { AnyOfAssertionProvider } from './providers/AnyOfAssertionProvider';
 import { ConstAssertionProvider } from './providers/ConstAssertionProvider';
-import { DescriptionAssertionProvider } from './providers/DescriptionAssertionProvider';
 import { EnumAssertionProvider } from './providers/EnumAssertionProvider';
 import { OneOfAssertionProvider } from './providers/OneOfAssertionProvider';
 import { RefAssertionProvider } from './providers/RefAssertionProvider';
@@ -80,7 +79,6 @@ export class Compiler {
         new AllOfAssertionProvider(),
         new AnyOfAssertionProvider(),
         new ConstAssertionProvider(),
-        new DescriptionAssertionProvider(),
         new EnumAssertionProvider(),
         new OneOfAssertionProvider(),
         new RefAssertionProvider(),

@@ -5,7 +5,7 @@ import { BaseAssertion } from './BaseAssertion';
 export class NumericTypeAssertion extends BaseAssertion {
   constructor(
     name: string,
-    private readonly constraints: Immutable<
+    constraints: Immutable<
       Pick<
         JSONSchema7,
         'exclusiveMaximum' | 'exclusiveMinimum' | 'maximum' | 'minimum' | 'multipleOf'
@@ -20,8 +20,4 @@ export class NumericTypeAssertion extends BaseAssertion {
       }
     );
   }
-
-  // provideTypes(typeCreator: ITypeCreator) {
-  //   // typeCreator.
-  // }
 }

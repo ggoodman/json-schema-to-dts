@@ -1,7 +1,6 @@
 import { JSONSchema7 } from 'json-schema';
 import { WriterFunction } from 'ts-morph';
 import { IAssertion } from '../IAssertion';
-import { ITypeCreator } from '../ITypeCreator';
 
 interface BaseAssertionOptions {
   docsWriter?: WriterFunction;
@@ -23,9 +22,5 @@ export abstract class BaseAssertion implements IAssertion {
     this.name = name;
     this.docsWriter = options.docsWriter;
     this.typeWriter = options.typeWriter;
-  }
-
-  provideTypes(typeCreator: ITypeCreator): void {
-    return;
   }
 }

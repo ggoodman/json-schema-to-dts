@@ -4,8 +4,6 @@ import { IAssertion } from '../IAssertion';
 import { BaseAssertion } from './BaseAssertion';
 
 export class OneOfAssertion extends BaseAssertion {
-  private readonly assertions: ReadonlyArray<IAssertion>;
-
   constructor(assertions: ReadonlyArray<IAssertion>) {
     const writers: WriterFunction[] = [];
     const consumedProperties = new Set<keyof JSONSchema7>();
@@ -34,7 +32,5 @@ export class OneOfAssertion extends BaseAssertion {
             }
           : writers[0],
     });
-
-    this.assertions = assertions;
   }
 }
