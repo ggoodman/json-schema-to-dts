@@ -16,12 +16,16 @@ export class AllOfAssertionProvider extends BaseAssertionProvider {
     const assertions: IAssertion[] = [];
 
     for (const def of schema.allOf) {
-      let assertion =
+      const assertion =
         typeof def === 'boolean' ? new BooleanAssertion(def) : ctx.provideAssertionForSchema(def);
 
-      assertions.push(assertion);
+      if (assertion) {
+        assertions.push(assertion);
+      }
     }
 
-    return new AllOfAssertion(assertions);
+    if (assertions.length) {
+      return new AllOfAssertion(assertions);
+    }
   }
 }

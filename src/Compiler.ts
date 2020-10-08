@@ -11,65 +11,14 @@ import { OneOfAssertionProvider } from './providers/OneOfAssertionProvider';
 import { RefAssertionProvider } from './providers/RefAssertionProvider';
 import { TypeAssertionProvider } from './providers/TypeAssertionProvider';
 
-// class TypeCreator implements ITypeCreator {
-//   private commentChunks: string[] = [];
-//   private topLevelNames = new Set<string>();
-//   readonly project = new Project({ useInMemoryFileSystem: true });
-//   readonly sourceFile = this.project.createSourceFile('schema.ts');
-
-//   appendDescription(description: string) {
-//     this.commentChunks.push(description);
-//   }
-
-//   // forSchema(schema: JSONSchema7, cb: (childCreator: ITypeCreator) => void) {
-//   //   const name = this.nameForSchema(schema);
-
-//   //   return name;
-//   // }
-
-//   toString() {
-//     const lines: string[] = [];
-
-//     if (this.commentChunks.length) {
-//       lines.push('/**');
-
-//       this.commentChunks.forEach((chunk, i) => {
-//         lines.push(...chunk.split('\n').map((line) => ` * ${line}`));
-
-//         if (i !== this.commentChunks.length - 1) {
-//           lines.push(' *');
-//         }
-//       });
-
-//       lines.push(' */');
-//     }
-
-//     return lines.join('\n');
-//   }
-
-//   generateDeconflictedName(baseName: string): string {
-//     if (!usedNames.has(baseName)) {
-//       usedNames.add(baseName);
-//       return baseName;
-//     }
-
-//     let suffix = 0;
-
-//     while (true) {
-//       const name = `${baseName}${suffix}`;
-
-//       if (!usedNames.has(name)) {
-//         usedNames.add(name);
-//         return name;
-//       }
-
-//       suffix++;
-//     }
-//   }
-// }
+interface SchemaMetadata {
+  name?: string;
+}
 
 export class Compiler {
   private readonly schemas = new Map<string, JSONSchema7>();
+  private readonly schemaMetadata = new Map<JSONSchema7, SchemaMetadata>();
+  private readonly schemaByName = new Map<string, JSONSchema7>();
 
   addSchema(schema: JSONSchema7, uri?: string) {
     if (uri) {
@@ -80,11 +29,56 @@ export class Compiler {
       throw new Error('Either the schema must have an $id or a uri must be provided, or both.');
     }
 
+    const baseName =
+      schema.title ||
+      (schema.$id
+        ? new URL(schema.$id).pathname
+            .replace(/^(?:[^/]*\/)?([^/]+)$/, '$1')
+            .replace(/\.[\w\.]*$/, '')
+            .replace(/[^a-z]/, '') || 'Schema'
+        : 'Schema');
+    let name: string | undefined = undefined;
+
+    if (!this.schemaByName.has(baseName)) {
+      name = baseName;
+    }
+
+    if (!name) {
+      let suffix = 0;
+
+      while (true) {
+        const candidate = `${baseName}${suffix}`;
+
+        if (!this.schemaByName.has(candidate)) {
+          name = candidate;
+          break;
+        }
+
+        suffix++;
+      }
+    }
+
     this.schemas.set(schema.$id, schema);
+    this.schemaByName.set(name, schema);
+    this.schemaMetadata.set(schema, { name });
   }
 
   getSchema(uri: string) {
     return this.schemas.get(uri);
+  }
+
+  getSchemaMetadata(ref: string | JSONSchema7) {
+    if (typeof ref === 'string') {
+      const schema = this.schemas.get(ref);
+
+      if (!schema) {
+        return;
+      }
+
+      ref = schema;
+    }
+
+    return this.schemaMetadata.get(ref);
   }
 
   compile() {
@@ -105,7 +99,7 @@ export class Compiler {
         new RefAssertionProvider(),
         new TypeAssertionProvider(),
       ],
-      schemas: this.schemas,
+      schemaByUri: this.schemas,
       uri: '#',
     });
     const assertionsByUri = new Map<string, IAssertion>();
@@ -131,23 +125,22 @@ export class Compiler {
       }
     };
 
-    for (const [uri, schema] of this.schemas) {
-      const assertion = context.provideAssertionForSchema(schema, uri);
-      const name = generateDeconflictedName(
-        schema.title ||
-          (schema.$id
-            ? new URL(schema.$id).pathname
-                .replace(/^(?:[^/]*\/)?([^/]+)$/, '$1')
-                .replace(/\.[\w\.]*$/, '')
-                .replace(/[^a-z]/, '') || 'Schema'
-            : 'Schema')
-      );
+    const exportedNames = new Set<string>();
 
+    for (const [uri, schema] of this.schemas) {
+      const name = context.generateDeconflictedName(schema, { uri });
+
+      context.provideAssertionForSchema(schema, { uri });
+
+      exportedNames.add(name);
+    }
+
+    for (const [name, assertion] of context.assertionsByName) {
       if (assertion.typeWriter) {
         sourceFile.addTypeAlias({
           name,
           type: assertion.typeWriter,
-          isExported: true,
+          isExported: exportedNames.has(name),
         });
       }
     }

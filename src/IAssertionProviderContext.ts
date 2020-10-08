@@ -1,16 +1,29 @@
 import { JSONSchema7 } from 'json-schema';
-import { Immutable } from '../typeUtils';
 import { IAssertion } from './IAssertion';
 import { IDiagnostic } from './IDiagnostic';
+import { Immutable } from './typeUtils';
+
+export interface ProvideAssertionForSchemaOptions {
+  name?: string;
+  uri?: string;
+  shouldDeclare?: boolean;
+  shouldExport?: boolean;
+}
 
 export interface IAssertionProviderContext {
+  readonly assertionsByName: Map<string, IAssertion>;
   readonly diagnostics: ReadonlyArray<IDiagnostic>;
-  readonly schemas: ReadonlyMap<string, JSONSchema7>;
+  readonly schemaByUri: ReadonlyMap<string, JSONSchema7>;
   readonly uri: string;
 
   addDiagnostic(diagnostic: IDiagnostic): void;
 
-  provideAssertionForRef(ref: string): IAssertion | undefined;
+  generateDeconflictedName(schema: JSONSchema7, options?: { uri?: string }): string;
 
-  provideAssertionForSchema(schema: Immutable<JSONSchema7>, uri?: string): IAssertion;
+  resolveRef(ref: string): { name: string; uri: string } | undefined;
+
+  provideAssertionForSchema(
+    schema: Immutable<JSONSchema7>,
+    options?: ProvideAssertionForSchemaOptions
+  ): IAssertion | undefined;
 }

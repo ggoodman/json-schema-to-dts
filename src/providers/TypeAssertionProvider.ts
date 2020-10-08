@@ -1,5 +1,4 @@
 import { JSONSchema7, JSONSchema7TypeName } from 'json-schema';
-import { AllOfAssertion } from '../assertions/AllOfAssertion';
 import { AnyOfAssertion } from '../assertions/AnyOfAssertion';
 import { ArrayTypeAssertion } from '../assertions/ArrayTypeAssertion';
 import { BooleanAssertion } from '../assertions/BooleanAssertion';
@@ -64,31 +63,41 @@ export class TypeAssertionProvider extends BaseAssertionProvider {
   }
 
   private provideAssertionForArray(ctx: IAssertionProviderContext, schema: JSONSchema7) {
-    const arrayAssertions: IAssertion[] = [new ArrayTypeAssertion(schema)];
+    let itemsAssertion: IAssertion | undefined = undefined;
 
     if (schema.items) {
-      let itemsAssertion: IAssertion;
-
       if (typeof schema.items === 'boolean') {
         itemsAssertion = new BooleanAssertion(schema.items);
       } else if (Array.isArray(schema.items)) {
-        itemsAssertion = new AnyOfAssertion(
-          schema.items.map((item) => {
-            if (typeof item === 'boolean') {
-              return new BooleanAssertion(item);
-            } else {
-              return ctx.provideAssertionForSchema(item);
-            }
-          })
-        );
-      } else {
-        itemsAssertion = ctx.provideAssertionForSchema(schema.items);
-      }
+        const itemsAssertions: IAssertion[] = [];
 
-      arrayAssertions.push(itemsAssertion);
+        for (const item of schema.items) {
+          if (typeof item === 'boolean') {
+            itemsAssertions.push(new BooleanAssertion(item));
+          } else {
+            const assertion = ctx.provideAssertionForSchema(item);
+
+            if (assertion) {
+              itemsAssertions.push(assertion);
+            }
+          }
+        }
+
+        if (!itemsAssertions.length) {
+          itemsAssertions.push(new BooleanAssertion(true));
+        }
+
+        itemsAssertion =
+          itemsAssertions.length > 1 ? new AnyOfAssertion(itemsAssertions) : itemsAssertions[0];
+      } else {
+        itemsAssertion = ctx.provideAssertionForSchema(schema.items) || new BooleanAssertion(true);
+      }
     }
 
-    return new AllOfAssertion(arrayAssertions);
+    return new ArrayTypeAssertion({
+      constraints: schema,
+      itemsAssertion,
+    });
   }
 
   private provideAssertionForObject(ctx: IAssertionProviderContext, schema: JSONSchema7) {
@@ -109,12 +118,12 @@ export class TypeAssertionProvider extends BaseAssertionProvider {
 
       for (const propertyName in properties) {
         const def = properties[propertyName];
-        let assertion: IAssertion;
+        let assertion: IAssertion | undefined;
 
         if (typeof def === 'boolean') {
           assertion = new BooleanAssertion(def);
         } else {
-          assertion = ctx.provideAssertionForSchema(def);
+          assertion = ctx.provideAssertionForSchema(def) || new BooleanAssertion(true);
         }
 
         knownPropertyAssertions[propertyName] = assertion;
@@ -131,7 +140,7 @@ export class TypeAssertionProvider extends BaseAssertionProvider {
         if (typeof def === 'boolean') {
           assertion = new BooleanAssertion(def);
         } else {
-          assertion = ctx.provideAssertionForSchema(def);
+          assertion = ctx.provideAssertionForSchema(def) || new BooleanAssertion(true);
         }
 
         patternPropertyAssertions[pattern] = assertion;

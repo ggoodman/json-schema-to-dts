@@ -24,11 +24,5 @@
   "include": [
     "src",
     "types"
-  ],
-  "files": [
-    "src/index.ts",
-    "./src/assertion/IAssertionProvider.ts",
-    "./src/assertion/IAssertion.ts",
-    "./src/assertion/IAssertionProviderContext.ts"
   ]
 }

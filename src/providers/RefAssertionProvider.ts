@@ -4,7 +4,6 @@ import { DanglingRefDiagnostic } from '../diagnostics/DanglingRefDiagnostic';
 import { IAssertion } from '../IAssertion';
 import { IAssertionProvider } from '../IAssertionProvider';
 import { IAssertionProviderContext } from '../IAssertionProviderContext';
-import { uriAppendFragmentPath } from '../uri';
 
 export class RefAssertionProvider implements IAssertionProvider {
   readonly name = RefAssertionProvider.name;
@@ -14,13 +13,13 @@ export class RefAssertionProvider implements IAssertionProvider {
       return;
     }
 
-    const assertion = ctx.provideAssertionForRef(schema.$ref);
+    const resolved = ctx.resolveRef(schema.$ref);
 
-    if (!assertion) {
+    if (!resolved) {
       ctx.addDiagnostic(new DanglingRefDiagnostic(ctx.uri, schema.$ref));
       return;
     }
 
-    return new RefAssertion(assertion);
+    return new RefAssertion(resolved.name);
   }
 }

@@ -3,9 +3,18 @@ import { Compiler } from './Compiler';
 import { DiagnosticSeverity } from './DiagnosticSeverity';
 
 function compile(schema: JSONSchema7, uri: string, options: { ignoreDiagnostics?: boolean } = {}) {
+  return compileMany([{ schema, uri }], options);
+}
+
+function compileMany(
+  schemas: Array<{ schema: JSONSchema7; uri: string }>,
+  options: { ignoreDiagnostics?: boolean } = {}
+) {
   const compiler = new Compiler();
 
-  compiler.addSchema(schema, uri);
+  for (const { schema, uri } of schemas) {
+    compiler.addSchema(schema, uri);
+  }
 
   const result = compiler.compile();
   const errorDiagnostics = result.diagnostics.filter(
@@ -373,7 +382,11 @@ describe('Compiler', () => {
     );
 
     expect(result.typeDefinitions).toMatchInlineSnapshot(`
-      "export type JSONSchema7 = ({
+      "type nonNegativeInteger = number;
+      type nonNegativeIntegerDefault0 = (nonNegativeInteger & nonNegativeInteger & nonNegativeInteger);
+      type stringArray = Array<string>;
+      type schemaArray = Array<schemaArray>;
+      export type JSONSchema7 = ({
           [additionalProperties: string]: any;
           $id: string;
           $schema: string;
@@ -384,54 +397,219 @@ describe('Compiler', () => {
           default: any;
           readOnly: boolean;
           writeOnly: boolean;
-          examples: ([
-          ] & any);
+          examples: Array<any>;
           multipleOf: number;
           maximum: number;
           exclusiveMaximum: number;
           minimum: number;
           exclusiveMinimum: number;
-          maxLength: any;
-          minLength: any;
+          maxLength: nonNegativeInteger;
+          minLength: nonNegativeIntegerDefault0;
           pattern: string;
-          additionalItems: any;
+          additionalItems: JSONSchema7;
           items: any;
-          maxItems: any;
-          minItems: any;
+          maxItems: nonNegativeInteger;
+          minItems: nonNegativeIntegerDefault0;
           uniqueItems: boolean;
-          contains: any;
-          maxProperties: any;
-          minProperties: any;
-          required: any;
-          additionalProperties: any;
+          contains: JSONSchema7;
+          maxProperties: nonNegativeInteger;
+          minProperties: nonNegativeIntegerDefault0;
+          required: stringArray;
+          additionalProperties: JSONSchema7;
           definitions: {
-              [additionalProperties: string]: any;
+              [additionalProperties: string]: JSONSchema7;
           };
           properties: {
-              [additionalProperties: string]: any;
+              [additionalProperties: string]: JSONSchema7;
           };
           patternProperties: {
-              [additionalProperties: string]: any;
+              [additionalProperties: string]: JSONSchema7;
           };
           dependencies: {
               [additionalProperties: string]: any;
           };
-          propertyNames: any;
+          propertyNames: JSONSchema7;
           const: any;
-          enum: ([
-          ] & any);
+          enum: Array<any>;
           type: any;
           format: string;
           contentMediaType: string;
           contentEncoding: string;
-          if: any;
-          then: any;
-          else: any;
-          allOf: any;
-          anyOf: any;
-          oneOf: any;
-          not: any;
+          if: JSONSchema7;
+          then: JSONSchema7;
+          else: JSONSchema7;
+          allOf: schemaArray;
+          anyOf: schemaArray;
+          oneOf: schemaArray;
+          not: JSONSchema7;
       } | boolean);
+      "
+    `);
+  });
+
+  it('will handle some internal use-cases', () => {
+    const result = compileMany([
+      {
+        schema: {
+          title: 'User',
+          type: 'object',
+          properties: {
+            id: {
+              type: 'string',
+            },
+            username: {
+              type: 'string',
+            },
+            name: {
+              type: 'string',
+            },
+            givenName: {
+              type: 'string',
+            },
+            familyName: {
+              type: 'string',
+            },
+            nickname: {
+              type: 'string',
+            },
+            email: {
+              type: 'string',
+            },
+            emailVerified: {
+              type: 'boolean',
+            },
+            phoneNumber: {
+              type: 'string',
+            },
+            phoneNumberVerified: {
+              type: 'boolean',
+            },
+            picture: {
+              type: 'string',
+            },
+            permissions: {
+              type: 'string',
+            },
+            userMetadata: {
+              type: 'object',
+              properties: {},
+              additionalProperties: true,
+              propertyNames: {
+                type: 'string',
+              },
+            },
+            appMetadata: {
+              type: 'object',
+              properties: {},
+              additionalProperties: true,
+              propertyNames: {
+                type: 'string',
+              },
+            },
+            createdAt: {
+              type: 'string',
+              format: 'date-time',
+            },
+            updatedAt: {
+              type: 'string',
+              format: 'date-time',
+            },
+            lastPasswordReset: {
+              type: 'string',
+              format: 'date-time',
+            },
+            identities: {
+              type: 'array',
+              items: {
+                $ref: 'UserIdentity.json',
+              },
+            },
+          },
+          additionalProperties: false,
+          required: [
+            'id',
+            'name',
+            'nickname',
+            'email',
+            'emailVerified',
+            'picture',
+            'userMetadata',
+            'appMetadata',
+            'createdAt',
+            'updatedAt',
+            'identities',
+          ],
+        },
+        uri: 'file:///User.json',
+      },
+      {
+        schema: {
+          title: 'UserIdentity',
+          type: 'object',
+          properties: {
+            connection: {
+              type: 'string',
+            },
+            provider: {
+              type: 'string',
+            },
+            userId: {
+              type: 'string',
+            },
+            profileData: {
+              type: 'object',
+              properties: {},
+              additionalProperties: true,
+            },
+            isSocial: {
+              type: 'boolean',
+            },
+            accessToken: {
+              type: 'string',
+            },
+          },
+          additionalProperties: false,
+          required: ['connection', 'provider', 'userId', 'isSocial'],
+        },
+        uri: 'file:///UserIdentity.json',
+      },
+    ]);
+
+    expect(result.typeDefinitions).toMatchInlineSnapshot(`
+      "export type UserIdentity = {
+          connection?: string;
+          provider?: string;
+          userId?: string;
+          profileData: {
+              [additionalProperties: string]: any;
+          };
+          isSocial?: boolean;
+          accessToken: string;
+      };
+      export type User = {
+          id?: string;
+          username: string;
+          name?: string;
+          givenName: string;
+          familyName: string;
+          nickname?: string;
+          email?: string;
+          emailVerified?: boolean;
+          phoneNumber: string;
+          phoneNumberVerified: boolean;
+          picture?: string;
+          permissions: string;
+          userMetadata?: {
+              [additionalProperties: string]: any;
+          };
+          appMetadata?: {
+              [additionalProperties: string]: any;
+          };
+          createdAt?: string;
+          updatedAt?: string;
+          lastPasswordReset: string;
+          identities?: Array<UserIdentity>;
+      };
       "
     `);
   });
