@@ -9,13 +9,13 @@ export class OneOfAssertionProvider extends BaseAssertionProvider {
   readonly name = OneOfAssertionProvider.name;
 
   provideAssertion(ctx: IAssertionProviderContext, schema: JSONSchema7) {
-    if (!schema.allOf || !schema.allOf.length) {
+    if (!schema.oneOf || !schema.oneOf.length) {
       return;
     }
 
     const assertions: IAssertion[] = [];
 
-    for (const def of schema.allOf) {
+    for (const def of schema.oneOf) {
       const assertion =
         typeof def === 'boolean' ? new BooleanAssertion(def) : ctx.provideAssertionForSchema(def);
 

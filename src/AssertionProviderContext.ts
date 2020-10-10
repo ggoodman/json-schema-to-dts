@@ -2,6 +2,7 @@ import { JSONSchema7 } from 'json-schema';
 import { URL } from 'url';
 import { SchemaAssertion } from './assertions/SchemaAssertion';
 import { UnknownPropertiesDiagnostic } from './diagnostics/UnknownPropertiesDiagnostic';
+import { DiagnosticSeverity } from './DiagnosticSeverity';
 import { IAssertion } from './IAssertion';
 import { IAssertionProvider } from './IAssertionProvider';
 import {
@@ -12,6 +13,7 @@ import { IDiagnostic } from './IDiagnostic';
 import { uriRelative } from './uri';
 
 export interface AssertionProviderContextOptions {
+  baseUri: string;
   uri: string;
   assertionCache?: Map<JSONSchema7, IAssertion>;
   assertionsToName?: Map<IAssertion, string>;
@@ -31,12 +33,15 @@ export class AssertionProviderContext implements IAssertionProviderContext {
   private readonly schemaToName: Map<JSONSchema7, string>;
   private readonly schemaByName: Map<string, JSONSchema7>;
   private readonly assertionProviders: IAssertionProvider[];
-  private readonly queue: Array<{ schema: JSONSchema7; uri: string }>;
+  readonly baseUri: string;
+  readonly queue: Array<{ schema: JSONSchema7; uri: string }>;
+  readonly seen = new Set<JSONSchema7>();
   readonly diagnostics: IDiagnostic[];
-  readonly schemaByUri: ReadonlyMap<string, JSONSchema7>;
+  readonly schemaByUri: Map<string, JSONSchema7>;
   readonly uri: string;
 
   constructor(options: AssertionProviderContextOptions) {
+    this.baseUri = options.baseUri;
     this.uri = options.uri;
     this.assertionCache = options.assertionCache || new Map();
     this.assertionsToName = options.assertionsToName || new Map();
@@ -46,7 +51,7 @@ export class AssertionProviderContext implements IAssertionProviderContext {
     this.assertionProviders = options.assertionProviders || [];
     this.queue = options.queue || [];
     this.diagnostics = options.diagnostics || [];
-    this.schemaByUri = options.schemaByUri || new Map();
+    this.schemaByUri = (options.schemaByUri as Map<string, JSONSchema7>) || new Map();
   }
 
   addDiagnostic(diagnostic: IDiagnostic) {
@@ -55,6 +60,7 @@ export class AssertionProviderContext implements IAssertionProviderContext {
 
   forUri(uri: string) {
     return new AssertionProviderContext({
+      baseUri: this.baseUri,
       uri,
       assertionCache: this.assertionCache,
       assertionsToName: this.assertionsToName,
@@ -68,7 +74,7 @@ export class AssertionProviderContext implements IAssertionProviderContext {
     });
   }
 
-  resolveRef(ref: string): { name: string; uri: string } | undefined {
+  declareReference(ref: string): { name: string; uri: string } | undefined {
     const uri = uriRelative(this.uri, ref);
     const url = new URL(uri);
     const hash = url.hash;
@@ -90,7 +96,7 @@ export class AssertionProviderContext implements IAssertionProviderContext {
         const segment = path.shift()!;
         const child = (schema as any)[segment] as JSONSchema7 | undefined;
 
-        if (!child) {
+        if (typeof child === 'undefined') {
           return;
         }
 
@@ -112,7 +118,9 @@ export class AssertionProviderContext implements IAssertionProviderContext {
     let assertion = this.assertionCache.get(schema);
 
     if (!assertion) {
-      const uri = options.uri ?? this.uri;
+      this.seen.add(schema);
+
+      const uri = this.uri;
       const childCtx = uri === this.uri ? this : this.forUri(uri);
       const assertions: IAssertion[] = [];
       const unconsumedFields = new Set<string>(Object.keys(schema));
@@ -149,12 +157,6 @@ export class AssertionProviderContext implements IAssertionProviderContext {
       }
     }
 
-    while (this.queue.length) {
-      const { schema, uri } = this.queue.shift()!;
-
-      this.provideAssertionForSchema(schema, { uri });
-    }
-
     return assertion;
   }
 
@@ -170,7 +172,7 @@ export class AssertionProviderContext implements IAssertionProviderContext {
     if (schema.title) {
       baseName = toSafeString(schema.title);
     } else {
-      const uri = schema.$id || options.uri;
+      const uri = options.uri || schema.$id;
 
       if (uri) {
         const url = new URL(uri);
@@ -179,12 +181,7 @@ export class AssertionProviderContext implements IAssertionProviderContext {
         if (matches && matches[1]) {
           baseName = toSafeString(matches[1]);
         } else {
-          baseName = toSafeString(
-            new URL(schema.$id || uri).pathname
-              .replace(/^(?:[^/]*\/)?([^/]+)$/, '$1')
-              .replace(/\.[\w\.]*$/, '')
-              .replace(/[^a-z]/, '') || 'Schema'
-          );
+          baseName = toSafeString(new URL(schema.$id || uri).pathname.replace(/\.[\w\.]*$/, ''));
         }
       } else {
         baseName = 'Schema';
@@ -212,6 +209,26 @@ export class AssertionProviderContext implements IAssertionProviderContext {
 
       suffix++;
     }
+  }
+
+  registerSchema(uri: string, schema: JSONSchema7) {
+    const existingSchema = this.schemaByUri.get(uri);
+
+    if (typeof existingSchema !== 'undefined' && existingSchema !== schema) {
+      this.addDiagnostic({
+        code: 'ESCHEMACONFLICT',
+        message: `A second, different schema was registered at ${JSON.stringify(uri)}.`,
+        severity: DiagnosticSeverity.Error,
+        uri,
+      });
+      return;
+    }
+
+    this.schemaByUri.set(uri, schema);
+  }
+
+  resolveReference(ref: string) {
+    return uriRelative(this.uri, ref);
   }
 }
 

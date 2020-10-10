@@ -15,6 +15,11 @@ export function uriRelative(uri: string, path: string) {
     return uri;
   }
 
+  // Normalize by stripping off trailing '#'
+  if (path.endsWith('#')) {
+    path = path.slice(0, -1);
+  }
+
   const url = new URL(path, uri);
 
   return url.href;

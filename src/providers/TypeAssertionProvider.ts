@@ -64,38 +64,39 @@ export class TypeAssertionProvider extends BaseAssertionProvider {
 
   private provideAssertionForArray(ctx: IAssertionProviderContext, schema: JSONSchema7) {
     let itemsAssertion: IAssertion | undefined = undefined;
+    let enumItemsAssertions: IAssertion[] = [];
+    let additionalItemsAssertion: IAssertion | undefined = undefined;
 
     if (schema.items) {
       if (typeof schema.items === 'boolean') {
         itemsAssertion = new BooleanAssertion(schema.items);
       } else if (Array.isArray(schema.items)) {
-        const itemsAssertions: IAssertion[] = [];
-
         for (const item of schema.items) {
           if (typeof item === 'boolean') {
-            itemsAssertions.push(new BooleanAssertion(item));
+            enumItemsAssertions.push(new BooleanAssertion(item));
           } else {
             const assertion = ctx.provideAssertionForSchema(item);
 
             if (assertion) {
-              itemsAssertions.push(assertion);
+              enumItemsAssertions.push(assertion);
             }
           }
         }
 
-        if (!itemsAssertions.length) {
-          itemsAssertions.push(new BooleanAssertion(true));
+        if (typeof schema.additionalItems === 'boolean') {
+          additionalItemsAssertion = new BooleanAssertion(schema.additionalItems);
+        } else if (schema.additionalItems) {
+          additionalItemsAssertion = ctx.provideAssertionForSchema(schema.additionalItems);
         }
-
-        itemsAssertion =
-          itemsAssertions.length > 1 ? new AnyOfAssertion(itemsAssertions) : itemsAssertions[0];
       } else {
         itemsAssertion = ctx.provideAssertionForSchema(schema.items) || new BooleanAssertion(true);
       }
     }
 
     return new ArrayTypeAssertion({
+      additionalItemsAssertion,
       constraints: schema,
+      enumItemsAssertions,
       itemsAssertion,
     });
   }

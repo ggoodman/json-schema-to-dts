@@ -1,25 +1,28 @@
 import { JSONSchema7 } from 'json-schema';
-import { RefAssertion } from '../assertions/RefAssertion';
+import { NoopAssertion } from '../assertions/NoopAssertion';
 import { DanglingRefDiagnostic } from '../diagnostics/DanglingRefDiagnostic';
 import { IAssertion } from '../IAssertion';
 import { IAssertionProvider } from '../IAssertionProvider';
 import { IAssertionProviderContext } from '../IAssertionProviderContext';
 
-export class RefAssertionProvider implements IAssertionProvider {
-  readonly name = RefAssertionProvider.name;
+export class IdAssertionProvider implements IAssertionProvider {
+  readonly name = IdAssertionProvider.name;
 
   provideAssertion(ctx: IAssertionProviderContext, schema: JSONSchema7): IAssertion | undefined {
-    if (!schema.$ref) {
+    if (!schema.$id) {
       return;
     }
 
-    const resolved = ctx.declareReference(schema.$ref);
+    const id = ctx.resolveReference(schema.$id);
+
+    ctx.registerSchema(id, schema);
+
+    const resolved = ctx.declareReference(id);
 
     if (typeof resolved === 'undefined') {
-      ctx.addDiagnostic(new DanglingRefDiagnostic(ctx.uri, schema.$ref));
-      return;
+      ctx.addDiagnostic(new DanglingRefDiagnostic(ctx.uri, id));
     }
 
-    return new RefAssertion(resolved.name);
+    return new NoopAssertion(['$id']);
   }
 }

@@ -1,14 +1,18 @@
 import { JSONSchema7 } from 'json-schema';
-import { Compiler } from './Compiler';
+import { CompileOptions, Compiler } from './Compiler';
 import { DiagnosticSeverity } from './DiagnosticSeverity';
 
-function compile(schema: JSONSchema7, uri: string, options: { ignoreDiagnostics?: boolean } = {}) {
+function compile(
+  schema: JSONSchema7,
+  uri: string,
+  options?: { ignoreDiagnostics?: boolean } & CompileOptions
+) {
   return compileMany([{ schema, uri }], options);
 }
 
 function compileMany(
   schemas: Array<{ schema: JSONSchema7; uri: string }>,
-  options: { ignoreDiagnostics?: boolean } = {}
+  options: { ignoreDiagnostics?: boolean } & CompileOptions = {}
 ) {
   const compiler = new Compiler();
 
@@ -16,7 +20,7 @@ function compileMany(
     compiler.addSchema(schema, uri);
   }
 
-  const result = compiler.compile();
+  const result = compiler.compile(options);
   const errorDiagnostics = result.diagnostics.filter(
     (diagnostic) => diagnostic.severity === DiagnosticSeverity.Error
   );
@@ -48,7 +52,7 @@ describe('Compiler', () => {
          * Hello world!
          *
          */
-        export type test = (\\"hello\\" | \\"world\\");
+        export type Test = (\\"hello\\" | \\"world\\");
         "
       `);
     });
@@ -69,13 +73,125 @@ describe('Compiler', () => {
       );
 
       expect(result.typeDefinitions).toMatchInlineSnapshot(`
-        "export type test = {
+        "export type Test = {
             /**
              * Hello world!
              *
              */
             hello: \\"world\\";
         };
+        "
+      `);
+    });
+  });
+
+  describe('type=array', () => {
+    it('minimal schema', () => {
+      const result = compile(
+        {
+          type: 'array',
+        },
+        'file:///test.json'
+      );
+
+      expect(result.typeDefinitions).toMatchInlineSnapshot(`
+        "export type Test = Array<any>;
+        "
+      `);
+    });
+
+    it('items as a single schema', () => {
+      const result = compile(
+        {
+          type: 'array',
+          items: {
+            type: 'string',
+          },
+        },
+        'file:///test.json'
+      );
+
+      expect(result.typeDefinitions).toMatchInlineSnapshot(`
+        "export type Test = Array<string>;
+        "
+      `);
+    });
+
+    it('items as a list of schemas', () => {
+      const result = compile(
+        {
+          type: 'array',
+          items: [
+            {
+              type: 'string',
+            },
+            {
+              type: 'number',
+            },
+          ],
+        },
+        'file:///test.json'
+      );
+
+      expect(result.typeDefinitions).toMatchInlineSnapshot(`
+        "export type Test = [
+            string,
+            number
+        ];
+        "
+      `);
+    });
+
+    it('items as a list of schemas with additionalItems', () => {
+      const result = compile(
+        {
+          type: 'array',
+          items: [
+            {
+              type: 'string',
+            },
+            {
+              type: 'number',
+            },
+          ],
+          additionalItems: { type: 'boolean' },
+        },
+        'file:///test.json'
+      );
+
+      expect(result.typeDefinitions).toMatchInlineSnapshot(`
+        "export type Test = [
+            string,
+            number,
+            ...boolean[]
+        ];
+        "
+      `);
+    });
+
+    it('items as a list of schemas with complex additionalItems', () => {
+      const result = compile(
+        {
+          type: 'array',
+          items: [
+            {
+              type: 'string',
+            },
+            {
+              type: 'number',
+            },
+          ],
+          additionalItems: { oneOf: [{ type: 'boolean' }, { type: 'null' }] },
+        },
+        'file:///test.json'
+      );
+
+      expect(result.typeDefinitions).toMatchInlineSnapshot(`
+        "export type Test = [
+            string,
+            number,
+            ...(boolean | null)[]
+        ];
         "
       `);
     });
@@ -91,7 +207,7 @@ describe('Compiler', () => {
       );
 
       expect(result.typeDefinitions).toMatchInlineSnapshot(`
-        "export type test = (\\"hello\\" | \\"world\\");
+        "export type Test = (\\"hello\\" | \\"world\\");
         "
       `);
     });
@@ -105,7 +221,7 @@ describe('Compiler', () => {
       );
 
       expect(result.typeDefinitions).toMatchInlineSnapshot(`
-        "export type test = (\\"hello\\" | 1 | true | {
+        "export type Test = (\\"hello\\" | 1 | true | {
             \\"goodnight\\": \\"moon\\";
         } | [
             null
@@ -125,7 +241,7 @@ describe('Compiler', () => {
       );
 
       expect(result.typeDefinitions).toMatchInlineSnapshot(`
-        "export type test = {
+        "export type Test = {
             [additionalProperties: string]: any;
         };
         "
@@ -142,7 +258,7 @@ describe('Compiler', () => {
       );
 
       expect(result.typeDefinitions).toMatchInlineSnapshot(`
-        "export type test = {
+        "export type Test = {
             [additionalProperties: string]: any;
         };
         "
@@ -159,7 +275,7 @@ describe('Compiler', () => {
       );
 
       expect(result.typeDefinitions).toMatchInlineSnapshot(`
-        "export type test = {
+        "export type Test = {
             [additionalProperties: string]: never;
         };
         "
@@ -188,14 +304,14 @@ describe('Compiler', () => {
       );
 
       expect(result.typeDefinitions).toMatchInlineSnapshot(`
-        "export type test = {
+        "export type Test = {
             [additionalProperties: string]: any;
             hello: string;
         };
         "
       `);
       expect(comparison.typeDefinitions).toMatchInlineSnapshot(`
-        "export type test = {
+        "export type Test = {
             [additionalProperties: string]: any;
             hello: string;
         };
@@ -215,7 +331,7 @@ describe('Compiler', () => {
       );
 
       expect(result.typeDefinitions).toMatchInlineSnapshot(`
-        "export type test = string;
+        "export type Test = string;
         "
       `);
     });
@@ -230,7 +346,7 @@ describe('Compiler', () => {
       );
 
       expect(result.typeDefinitions).toMatchInlineSnapshot(`
-        "export type test = ((\\"hello\\" | \\"world\\") & string);
+        "export type Test = ((\\"hello\\" | \\"world\\") & string);
         "
       `);
     });
@@ -262,7 +378,7 @@ describe('Compiler', () => {
       );
 
       expect(result.typeDefinitions).toMatchInlineSnapshot(`
-        "export type test = boolean;
+        "export type Test = boolean;
         "
       `);
     });
@@ -431,7 +547,7 @@ describe('Compiler', () => {
 
     expect(result.typeDefinitions).toMatchInlineSnapshot(`
       "type nonNegativeInteger = number;
-      type nonNegativeIntegerDefault0 = (nonNegativeInteger & nonNegativeInteger & nonNegativeInteger);
+      type nonNegativeIntegerDefault0 = (nonNegativeInteger & nonNegativeInteger);
       type stringArray = Array<string>;
       type schemaArray = Array<schemaArray>;
       export type JSONSchema7 = ({
@@ -660,5 +776,32 @@ describe('Compiler', () => {
       };
       "
     `);
+  });
+
+  describe('Assertion funcitons', () => {
+    it('will generate type assertion functions', () => {
+      const result = compile(
+        {
+          type: 'array',
+        },
+        'file:///Test.json',
+        { generateCodecs: true }
+      );
+
+      expect(result.typeDefinitions).toMatchInlineSnapshot(`
+        "export type Test = Array<any>;
+        class EvaluationContext {
+        }
+        function isArray<T = any>(ctx: EvaluationContext, arr: unknown, predicate?: (el: unknown) => el is T): arr is T[] {
+            return Array.isArray(arr) && (!predicate || arr.every(predicate));
+        }
+        export namespace TestCodec {
+            export function decode(value: unknown): value is Test {
+                return false;
+            }
+        }
+        "
+      `);
+    });
   });
 });

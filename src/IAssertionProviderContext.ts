@@ -5,7 +5,7 @@ import { Immutable } from './typeUtils';
 
 export interface ProvideAssertionForSchemaOptions {
   name?: string;
-  uri?: string;
+  // uri?: string;
   shouldDeclare?: boolean;
   shouldExport?: boolean;
 }
@@ -15,15 +15,20 @@ export interface IAssertionProviderContext {
   readonly diagnostics: ReadonlyArray<IDiagnostic>;
   readonly schemaByUri: ReadonlyMap<string, JSONSchema7>;
   readonly uri: string;
+  readonly baseUri: string;
 
   addDiagnostic(diagnostic: IDiagnostic): void;
 
-  generateDeconflictedName(schema: JSONSchema7, options?: { uri?: string }): string;
+  declareReference(ref: string): { name: string; uri: string } | undefined;
 
-  resolveRef(ref: string): { name: string; uri: string } | undefined;
+  generateDeconflictedName(schema: JSONSchema7, options?: { uri?: string }): string;
 
   provideAssertionForSchema(
     schema: Immutable<JSONSchema7>,
     options?: ProvideAssertionForSchemaOptions
   ): IAssertion | undefined;
+
+  registerSchema(uri: string, schema: JSONSchema7): void;
+
+  resolveReference(ref: string): string;
 }
