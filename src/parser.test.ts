@@ -2,8 +2,8 @@ import * as Fs from 'fs';
 import { JSONSchema7Definition } from 'json-schema';
 import * as Path from 'path';
 import { URL } from 'url';
-import { CompilationResult, compile, DiagnosticSeverity } from '.';
-import { IDiagnostic } from './IDiagnostic';
+import { ParserDiagnosticKind } from './diagnostics';
+import { parse } from './parser';
 
 describe('json-schema test suite', () => {
   const baseRemoteUrl = new URL('http://localhost:1234/');
@@ -61,24 +61,17 @@ describe('json-schema test suite', () => {
   for (const { name, cases, uri } of suite) {
     describe(name, () => {
       for (const { description, schema, tests } of cases) {
-        let result: CompilationResult = { diagnostics: [], typeDefinitions: '' };
-        let errorDiagnostics: IDiagnostic[] = [];
-
         describe(description, () => {
-          beforeAll(() => {
-            result = compile([...remoteSchemas, { schema, uri }], { generateCodecs: true });
-            errorDiagnostics = result.diagnostics.filter(
-              (d) => d.severity === DiagnosticSeverity.Error
+          it(description, () => {
+            const result = parse([...remoteSchemas, { schema, uri }]);
+            const errorDiagnostics = result.diagnostics.filter(
+              (d) => d.severity === ParserDiagnosticKind.Error
             );
 
-            expect(typeof result.typeDefinitions).toBe('string');
-            expect(result.typeDefinitions.length).toBeGreaterThan(0);
             expect(errorDiagnostics).toHaveLength(0);
           });
-
-          for (const { description, data, valid } of tests) {
-            it.todo(description);
-          }
+          // for (const { description, data, valid } of tests) {
+          // }
         });
       }
     });
