@@ -115,6 +115,10 @@ export class ParserContext implements IParserContext {
 
     this.nodesByUri.set(this.uri, node);
 
+    if (this.baseUri !== this.uri) {
+      this.nodesByUri.set(this.baseUri, node);
+    }
+
     this.uri = uri;
     this.baseUri = baseUri;
 

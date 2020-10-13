@@ -113,7 +113,15 @@ export class Parser {
   }
 
   private getNodeByReference(ref: IReference): ISchemaNode {
-    const node = this.ctx.nodesByUri.get(ref.toUri) || this.ctx.nodesByUri.get(ref.toBaseUri);
+    let node = this.ctx.nodesByUri.get(ref.toUri) || this.ctx.nodesByUri.get(ref.toBaseUri);
+
+    if (!node) {
+      const schema = this.ctx.getSchemaByReference(ref);
+
+      if (schema) {
+        node = this.ctx.enterUri(ref.toUri, schema, parseSchemaDefinition);
+      }
+    }
 
     if (!node) {
       throw new Error(

@@ -157,7 +157,7 @@ export class BooleanSchemaNode extends BaseSchemaNode<boolean> {
   readonly kind = SchemaNodeKind.Boolean;
 
   provideWriters(
-    ctx: ITypingContext
+    _ctx: ITypingContext
   ): { typeWriter: WriterFunction; validatorWriter: WriterFunction } {
     return {
       typeWriter: createLiteralWriterFunction(this.schema ? 'unknown' : 'never'),

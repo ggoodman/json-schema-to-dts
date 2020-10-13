@@ -58,26 +58,56 @@ describe('json-schema test suite', () => {
 
   addRemotesAtPath('');
 
-  for (const { name, cases, uri } of suite) {
-    describe(name, () => {
-      for (const { description, schema, tests } of cases) {
-        describe(description, () => {
-          it(description, () => {
-            const parser = new Parser();
+  const matrix: [
+    string,
+    typeof suite[number]['cases'],
+    string
+  ][] = suite.map(({ name, cases, uri }) => [name, cases, uri]);
 
-            remoteSchemas.forEach(({ schema, uri }) => parser.addSchema(uri, schema));
+  describe.each(matrix)('%s', (_name, cases, uri) => {
+    const matrix: [
+      string,
+      JSONSchema7Definition,
+      typeof suite[number]['cases'][number]['tests']
+    ][] = cases.map(({ description, schema, tests }) => [description, schema, tests]);
 
-            const result = parser.compile();
-            const errorDiagnostics = result.diagnostics.filter(
-              (d) => d.severity === ParserDiagnosticKind.Error
-            );
+    describe.each(matrix)('%s', (_name, schema, tests) => {
+      const parser = new Parser();
 
-            expect(errorDiagnostics).toHaveLength(0);
-          });
-          // for (const { description, data, valid } of tests) {
-          // }
-        });
-      }
+      remoteSchemas.forEach(({ schema, uri }) => parser.addSchema(uri, schema));
+
+      parser.addSchema(uri, schema);
+
+      const result = parser.compile();
+      const errorDiagnostics = result.diagnostics.filter(
+        (d) => d.severity === ParserDiagnosticKind.Error
+      );
+
+      expect(errorDiagnostics).toHaveLength(0);
+
+      const matrix: [string, unknown, boolean][] = tests.map(({ description, data, valid }) => [
+        description,
+        data,
+        valid,
+      ]);
+
+      it.each(matrix)('%s', (_name, data, valid) => {
+        expect(true).toBe(true);
+      });
     });
-  }
+  });
+
+  //   for (const { name, cases, uri } of suite) {
+  //     describe(name, () => {
+  //       for (const { description, schema, tests } of cases) {
+  //         beforeAll(async () => {});
+
+  //         describe(description, () => {
+  //           it(description, () => {});
+  //           // for (const { description, data, valid } of tests) {
+  //           // }
+  //         });
+  //       }
+  //     });
+  //   }
 });
