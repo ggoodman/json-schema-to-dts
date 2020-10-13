@@ -251,35 +251,33 @@ export class SchemaNode extends BaseSchemaNode<JSONSchema7, SchemaNodeOptions> {
     }
 
     // TODO: Fix this to return a typeWriter and validatorWriter so that alternatives are not treated as an intersection when type is an array
-    const writeForTypeName = (typeName: JSONSchema7TypeName) => {
+    const writeForTypeName = (
+      typeName: JSONSchema7TypeName
+    ): { typeWriter: WriterFunction; validatorWriter: WriterFunction } => {
       switch (typeName) {
         case 'array': {
-          const { typeWriter, validatorWriter } = this.provideWritersForTypeArray(ctx);
-          typeWriters.push(typeWriter);
-          validatorWriters.push(validatorWriter);
-          break;
+          return this.provideWritersForTypeArray(ctx);
         }
         case 'boolean': {
-          typeWriters.push(createLiteralWriterFunction('boolean'));
-          validatorWriters.push(createLiteralWriterFunction('new BooleanTypeValidator()'));
-          break;
+          return {
+            typeWriter: createLiteralWriterFunction('boolean'),
+            validatorWriter: createLiteralWriterFunction('new BooleanTypeValidator()'),
+          };
         }
         case 'null': {
-          typeWriters.push(createLiteralWriterFunction('null'));
-          validatorWriters.push(createLiteralWriterFunction('new NullTypeValidator()'));
-          break;
+          return {
+            typeWriter: createLiteralWriterFunction('null'),
+            validatorWriter: createLiteralWriterFunction('new NullTypeValidator()'),
+          };
         }
         case 'object': {
-          const { typeWriter, validatorWriter } = this.provideWritersForTypeObject(ctx);
-          typeWriters.push(typeWriter);
-          validatorWriters.push(validatorWriter);
-          break;
+          return this.provideWritersForTypeObject(ctx);
         }
         case 'integer':
         case 'number': {
-          typeWriters.push(createLiteralWriterFunction('number'));
-          validatorWriters.push(
-            createLiteralWriterFunction(
+          return {
+            typeWriter: createLiteralWriterFunction('number'),
+            validatorWriter: createLiteralWriterFunction(
               `new NumberTypeValidator(${JSON.stringify({
                 type: this.schema.type,
                 multipleOf: this.schema.multipleOf,
@@ -288,32 +286,43 @@ export class SchemaNode extends BaseSchemaNode<JSONSchema7, SchemaNodeOptions> {
                 minimum: this.schema.minimum,
                 exclusiveMinimum: this.schema.exclusiveMinimum,
               })})`
-            )
-          );
-          break;
+            ),
+          };
         }
         case 'string': {
-          typeWriters.push(createLiteralWriterFunction('string'));
-          validatorWriters.push(
-            createLiteralWriterFunction(
+          return {
+            typeWriter: createLiteralWriterFunction('string'),
+            validatorWriter: createLiteralWriterFunction(
               `new StringTypeValidator(${JSON.stringify({
                 maxLength: this.schema.maxLength,
                 minLength: this.schema.minLength,
                 pattern: this.schema.pattern,
               })})`
-            )
-          );
-          break;
+            ),
+          };
         }
+        default:
+          throw new Error(
+            `Invariant violation: Unable to handle unknown type name ${JSON.stringify(typeName)}`
+          );
       }
     };
 
     if (Array.isArray(this.schema.type)) {
-      for (const typeName of this.schema.type) {
-        writeForTypeName(typeName);
+      const results = this.schema.type.map(writeForTypeName);
+      const unionTypeWriters: WriterFunction[] = [];
+
+      for (const { typeWriter, validatorWriter } of results) {
+        unionTypeWriters.push(typeWriter);
+        validatorWriters.push(validatorWriter);
       }
+
+      typeWriters.push(createUnionTypeWriterFunction(unionTypeWriters));
     } else if (this.schema.type) {
-      writeForTypeName(this.schema.type);
+      const { typeWriter, validatorWriter } = writeForTypeName(this.schema.type);
+
+      typeWriters.push(typeWriter);
+      validatorWriters.push(validatorWriter);
     }
 
     if (!typeWriters.length) {
@@ -321,9 +330,8 @@ export class SchemaNode extends BaseSchemaNode<JSONSchema7, SchemaNodeOptions> {
     }
 
     if (!validatorWriters.length) {
-      // TODO: Replace this with an actual implementation
       validatorWriters.push(
-        createLiteralWriterFunction(`new ConstantValidator(${JSON.stringify(false)})`)
+        createLiteralWriterFunction(`new ConstantValidator(${JSON.stringify(true)})`)
       );
     }
 
@@ -413,9 +421,9 @@ export class SchemaNode extends BaseSchemaNode<JSONSchema7, SchemaNodeOptions> {
       } = items.provideWriters(ctx);
 
       typeWriter = (arrayWriter) => {
-        arrayWriter.write('Array<');
+        arrayWriter.write('(');
         itemsTypeWriter(arrayWriter);
-        arrayWriter.write('>');
+        arrayWriter.write(')[]');
       };
 
       validatorWriterOptions.items = itemsValidatorWriter;

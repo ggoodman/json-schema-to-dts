@@ -1,6 +1,13 @@
 import { readFileSync } from 'fs';
 import { JSONSchema7, JSONSchema7Definition, JSONSchema7TypeName } from 'json-schema';
-import { IndentationText, Project } from 'ts-morph';
+import { format } from 'prettier';
+import {
+  IndentationText,
+  ModuleKind,
+  Project,
+  ScriptTarget,
+  VariableDeclarationKind,
+} from 'ts-morph';
 import { URL } from 'url';
 import { IParserDiagnostic, ParserDiagnosticKind } from './diagnostics';
 import {
@@ -32,7 +39,7 @@ export class Parser {
 
     return {
       diagnostics,
-      typeDefinitions,
+      ...typeDefinitions,
     };
   }
 
@@ -134,6 +141,19 @@ export class Parser {
     };
 
     const project = new Project({
+      compilerOptions: {
+        alwaysStrict: true,
+        declaration: true,
+        downlevelIteration: true,
+        esModuleInterop: true,
+        isolatedModules: true,
+        lib: ['esnext'],
+        module: ModuleKind.CommonJS,
+        removeComments: true,
+        strict: true,
+        suppressExcessPropertyErrors: true,
+        target: ScriptTarget.ES2018,
+      },
       useInMemoryFileSystem: true,
       manipulationSettings: {
         indentationText: IndentationText.TwoSpaces,
@@ -154,32 +174,20 @@ export class Parser {
         type: typeWriter,
         isExported: true,
       });
-      sourceFile.addClass({
-        name: `${name}Codec`,
-        extends: `Codec<${name}>`,
+      sourceFile.addVariableStatement({
+        declarationKind: VariableDeclarationKind.Const,
+        declarations: [
+          {
+            name: `${name}Codec`,
+            initializer: (writer) => {
+              writer.write(`new Codec<${name}>(`);
+              validatorWriter(writer);
+              writer.write(`)`);
+            },
+            type: `Codec<${name}>`,
+          },
+        ],
         isExported: true,
-        methods: [
-          {
-            name: 'assertValid',
-            parameters: [{ name: 'value', type: 'unknown' }],
-            returnType: `asserts value is ${name}`,
-            statements: [`this.assertValidInternal(${name}Codec.validator, value)`],
-          },
-        ],
-        properties: [
-          {
-            name: 'validator',
-            docs: [
-              {
-                tags: [{ tagName: 'internal' }],
-              },
-            ],
-            initializer: validatorWriter,
-            isStatic: true,
-            isReadonly: true,
-            type: 'IValidator',
-          },
-        ],
       });
 
       printed.add(node);
@@ -198,36 +206,54 @@ export class Parser {
           isExported: false,
         });
 
-        sourceFile.addClass({
-          name: `${name}Codec`,
-          extends: `Codec<${name}>`,
-          isExported: false,
-          methods: [
+        sourceFile.addVariableStatement({
+          declarationKind: VariableDeclarationKind.Const,
+          declarations: [
             {
-              name: 'assertValid',
-              parameters: [{ name: 'value', type: 'unknown' }],
-              returnType: `asserts value is ${name}`,
-              statements: [`this.assertValidInternal(${name}Codec.validator, value)`],
+              name: `${name}Codec`,
+              initializer: (writer) => {
+                writer.write(`new Codec<${name}>(`);
+                validatorWriter(writer);
+                writer.write(`)`);
+              },
+              type: `Codec<${name}>`,
             },
           ],
-          properties: [
-            {
-              name: 'validator',
-              docs: [
-                {
-                  tags: [{ tagName: 'internal' }],
-                },
-              ],
-              initializer: validatorWriter,
-              isStatic: true,
-              isReadonly: true,
-            },
-          ],
+          isExported: true,
         });
       }
     }
 
-    return sourceFile.print();
+    const unformattedTypeScriptCode = sourceFile.print();
+    const formattedTypeScriptCode = format(unformattedTypeScriptCode, { filepath: 'schema.ts' });
+    const emitResult = project.emitToMemory();
+
+    const result = {
+      typeScript: formattedTypeScriptCode,
+      javaScript: '',
+      typeDefinition: '',
+    };
+
+    for (const diagnostic of emitResult.getDiagnostics()) {
+      console.log(diagnostic.getMessageText());
+    }
+
+    for (const file of emitResult.getFiles()) {
+      switch (file.filePath) {
+        case '/schema.js': {
+          result.javaScript = format(file.text, { filepath: file.filePath });
+          break;
+        }
+        case '/schema.d.ts': {
+          result.typeDefinition = format(file.text, { filepath: file.filePath });
+          break;
+        }
+        default:
+          throw new Error(`Invariant error: Project emitted an unexpected file ${file.filePath}`);
+      }
+    }
+
+    return result;
   }
 }
 

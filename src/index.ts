@@ -10,9 +10,11 @@ async function main() {
 
   parser.addSchema(`file://${schemaPath}`, schema);
 
-  const { typeDefinitions } = parser.compile();
+  const { javaScript, typeDefinition, typeScript } = parser.compile();
 
-  await Fs.writeFile(Path.resolve(__dirname, './schema.ts'), typeDefinitions);
+  await Fs.writeFile(Path.resolve(__dirname, './schema.ts'), typeScript);
+  await Fs.writeFile(Path.resolve(__dirname, './schema.js'), javaScript);
+  await Fs.writeFile(Path.resolve(__dirname, './schema.d.ts'), typeDefinition);
 }
 
 main().catch((err) => {
