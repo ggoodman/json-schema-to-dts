@@ -113,6 +113,8 @@ export class ParserContext implements IParserContext {
 
     const node = fn();
 
+    this.nodesByUri.set(this.uri, node);
+
     this.uri = uri;
     this.baseUri = baseUri;
 

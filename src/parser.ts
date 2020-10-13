@@ -1,52 +1,240 @@
+import { readFileSync } from 'fs';
 import { JSONSchema7, JSONSchema7Definition, JSONSchema7TypeName } from 'json-schema';
+import { IndentationText, Project } from 'ts-morph';
+import { URL } from 'url';
 import { IParserDiagnostic, ParserDiagnosticKind } from './diagnostics';
-import { BooleanSchemaNode, ISchemaNode, SchemaNode, SchemaNodeOptions } from './nodes';
+import {
+  BooleanSchemaNode,
+  ISchemaNode,
+  ITypingContext,
+  SchemaNode,
+  SchemaNodeOptions,
+} from './nodes';
 import { IParserContext, ParserContext } from './parserContext';
+import { IReference } from './references';
 
-export interface ParseResult {
-  diagnostics: IParserDiagnostic[];
-  nodes: Map<string, ISchemaNode>;
-  schemas: Map<string, JSONSchema7Definition>;
-}
+export class Parser {
+  private readonly ctx = new ParserContext();
+  private readonly uriToTypeName = new Map<string, string>();
+  private readonly uriByTypeName = new Map<string, string>();
+  private readonly rootNodes = new Map<string, ISchemaNode>();
 
-export function parse(schemas: { schema: JSONSchema7Definition; uri: string }[]): ParseResult {
-  const ctx = new ParserContext();
-  const nodes: ISchemaNode[] = [];
-  const diagnostics: IParserDiagnostic[] = [];
+  private static boilerplate = readFileSync(`${__dirname}/assertions.ts`, 'utf-8');
 
-  for (const { schema, uri } of schemas) {
-    nodes.push(ctx.enterUri(uri, schema, parseSchemaDefinition));
+  addSchema(uri: string, schema: JSONSchema7Definition) {
+    const node = this.ctx.enterUri(uri, schema, parseSchemaDefinition);
+    this.rootNodes.set(uri, node);
   }
 
-  for (const reference of ctx.references) {
-    const node = ctx.getSchemaByReference(reference);
+  compile() {
+    const diagnostics = this.checkReferences();
+    const typeDefinitions = this.generateTypings();
 
-    if (typeof node === 'undefined') {
-      diagnostics.push({
-        code: 'EUNRESOLVED',
-        severity: ParserDiagnosticKind.Error,
-        message: `Missing schema for the reference ${JSON.stringify(
-          reference.ref
-        )} at ${JSON.stringify(reference.fromUri)} that resolved to ${JSON.stringify(
-          reference.toUri
-        )}.`,
-        uri: reference.fromUri,
-        baseUri: reference.fromBaseUri,
-      });
+    return {
+      diagnostics,
+      typeDefinitions,
+    };
+  }
+
+  private checkReferences(): IParserDiagnostic[] {
+    const diagnostics: IParserDiagnostic[] = [];
+
+    for (const reference of this.ctx.references) {
+      const node = this.ctx.getSchemaByReference(reference);
+
+      if (typeof node === 'undefined') {
+        diagnostics.push({
+          code: 'EUNRESOLVED',
+          severity: ParserDiagnosticKind.Error,
+          message: `Missing schema for the reference ${JSON.stringify(
+            reference.ref
+          )} at ${JSON.stringify(reference.fromUri)} that resolved to ${JSON.stringify(
+            reference.toUri
+          )}.`,
+          uri: reference.fromUri,
+          baseUri: reference.fromBaseUri,
+        });
+      }
     }
+
+    return diagnostics;
   }
 
-  return {
-    diagnostics,
-    nodes: ctx.nodesByUri,
-    schemas: ctx.schemasByUri,
-  };
+  private generateDeconflictedName(node: ISchemaNode): string {
+    const cached = this.uriToTypeName.get(node.uri);
+
+    if (cached) {
+      return cached;
+    }
+
+    let candidate: string = '';
+
+    if (typeof node.schema !== 'boolean' && node.schema.title) {
+      candidate = toSafeString(node.schema.title);
+    } else {
+      const url = new URL(node.uri);
+      const matches = url.hash.match(/^#\/(?:\w+\/)*(\w+)$/);
+
+      if (matches && matches[1]) {
+        candidate = toSafeString(matches[1]);
+      } else {
+        candidate = toSafeString(
+          new URL((node.schema as JSONSchema7).$id || node.uri).pathname.replace(/\.[\w\.]*$/, '')
+        );
+      }
+    }
+
+    if (!candidate) {
+      candidate = 'AnonymousSchema';
+    }
+
+    if (this.uriByTypeName.has(candidate)) {
+      let suffix = 0;
+      const baseName = candidate;
+
+      for (
+        candidate = `${baseName}${suffix++}`;
+        this.uriByTypeName.has(candidate);
+        candidate = `${baseName}${suffix++}`
+      );
+    }
+
+    this.uriToTypeName.set(node.uri, candidate);
+    this.uriByTypeName.set(candidate, node.uri);
+
+    return candidate;
+  }
+
+  private getNodeByReference(ref: IReference): ISchemaNode {
+    const node = this.ctx.nodesByUri.get(ref.toUri) || this.ctx.nodesByUri.get(ref.toBaseUri);
+
+    if (!node) {
+      throw new Error(
+        `Missing schema for the reference ${JSON.stringify(ref.ref)} at ${JSON.stringify(
+          ref.fromUri
+        )} that resolved to ${JSON.stringify(ref.toUri)}.`
+      );
+    }
+
+    return node;
+  }
+
+  private generateTypings() {
+    const liftedTypes = new Map<string, ISchemaNode>();
+
+    const _ctx: ITypingContext = {
+      getNameForReference: (ref: IReference) => {
+        const node = this.getNodeByReference(ref);
+        const name = this.generateDeconflictedName(node);
+
+        liftedTypes.set(name, node);
+
+        return name;
+      },
+    };
+
+    const project = new Project({
+      useInMemoryFileSystem: true,
+      manipulationSettings: {
+        indentationText: IndentationText.TwoSpaces,
+      },
+    });
+    const sourceFile = project.createSourceFile('schema.ts', Parser.boilerplate);
+    const printed = new Set<ISchemaNode>();
+
+    for (const node of this.rootNodes.values()) {
+      // Exported schemas should get first pick
+      const name = this.generateDeconflictedName(node);
+
+      const { typeWriter, validatorWriter } = node.provideWriters(_ctx);
+
+      sourceFile.addTypeAlias({
+        name: this.generateDeconflictedName(node),
+        // docs: assertion.docsWriter && [{ description: assertion.docsWriter }],
+        type: typeWriter,
+        isExported: true,
+      });
+      sourceFile.addClass({
+        name: `${name}Codec`,
+        extends: `Codec<${name}>`,
+        isExported: true,
+        methods: [
+          {
+            name: 'assertValid',
+            parameters: [{ name: 'value', type: 'unknown' }],
+            returnType: `asserts value is ${name}`,
+            statements: [`this.assertValidInternal(${name}Codec.validator, value)`],
+          },
+        ],
+        properties: [
+          {
+            name: 'validator',
+            docs: [
+              {
+                tags: [{ tagName: 'internal' }],
+              },
+            ],
+            initializer: validatorWriter,
+            isStatic: true,
+            isReadonly: true,
+            type: 'IValidator',
+          },
+        ],
+      });
+
+      printed.add(node);
+    }
+
+    for (const [name, node] of liftedTypes) {
+      if (!printed.has(node)) {
+        printed.add(node);
+
+        const { typeWriter, validatorWriter } = node.provideWriters(_ctx);
+
+        sourceFile.addTypeAlias({
+          name,
+          // docs: assertion.docsWriter && [{ description: assertion.docsWriter }],
+          type: typeWriter,
+          isExported: false,
+        });
+
+        sourceFile.addClass({
+          name: `${name}Codec`,
+          extends: `Codec<${name}>`,
+          isExported: false,
+          methods: [
+            {
+              name: 'assertValid',
+              parameters: [{ name: 'value', type: 'unknown' }],
+              returnType: `asserts value is ${name}`,
+              statements: [`this.assertValidInternal(${name}Codec.validator, value)`],
+            },
+          ],
+          properties: [
+            {
+              name: 'validator',
+              docs: [
+                {
+                  tags: [{ tagName: 'internal' }],
+                },
+              ],
+              initializer: validatorWriter,
+              isStatic: true,
+              isReadonly: true,
+            },
+          ],
+        });
+      }
+    }
+
+    return sourceFile.print();
+  }
 }
 
 function parseSchemaDefinition(ctx: IParserContext, schema: JSONSchema7Definition): ISchemaNode {
   return ctx.enterSchemaNode(schema, () =>
     typeof schema === 'boolean'
-      ? new BooleanSchemaNode(ctx.uri, ctx.baseUri, schema)
+      ? new BooleanSchemaNode(ctx.uri, ctx.baseUri, schema, undefined)
       : parseSchema(ctx, schema)
   );
 }
@@ -151,7 +339,25 @@ function parseSchema(ctx: IParserContext, schema: JSONSchema7): ISchemaNode {
     }
   }
 
-  return new SchemaNode(ctx.uri, ctx.baseUri, o);
+  return new SchemaNode(ctx.uri, ctx.baseUri, schema, o);
+}
+
+function toSafeString(str: string) {
+  return (
+    str
+      .replace(/(^\s*[^a-zA-Z_$])|([^a-zA-Z_$\d])/g, ' ')
+      // uppercase leading underscores followed by lowercase
+      .replace(/^_[a-z]/g, (match) => match.toUpperCase())
+      // remove non-leading underscores followed by lowercase (convert snake_case)
+      .replace(/_[a-z]/g, (match) => match.substr(1, match.length).toUpperCase())
+      // uppercase letters after digits, dollars
+      .replace(/([\d$]+[a-zA-Z])/g, (match) => match.toUpperCase())
+      // uppercase first letter after whitespace
+      .replace(/\s+([a-zA-Z])/g, (match) => match.toUpperCase())
+      // remove remaining whitespace
+      .replace(/\s/g, '')
+      .replace(/^[a-z]/, (match) => match.toUpperCase())
+  );
 }
 
 function visitAsArray(ctx: IParserContext, schema: JSONSchema7, o: SchemaNodeOptions) {

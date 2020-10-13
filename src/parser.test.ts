@@ -3,7 +3,7 @@ import { JSONSchema7Definition } from 'json-schema';
 import * as Path from 'path';
 import { URL } from 'url';
 import { ParserDiagnosticKind } from './diagnostics';
-import { parse } from './parser';
+import { Parser } from './parser';
 
 describe('json-schema test suite', () => {
   const baseRemoteUrl = new URL('http://localhost:1234/');
@@ -63,7 +63,11 @@ describe('json-schema test suite', () => {
       for (const { description, schema, tests } of cases) {
         describe(description, () => {
           it(description, () => {
-            const result = parse([...remoteSchemas, { schema, uri }]);
+            const parser = new Parser();
+
+            remoteSchemas.forEach(({ schema, uri }) => parser.addSchema(uri, schema));
+
+            const result = parser.compile();
             const errorDiagnostics = result.diagnostics.filter(
               (d) => d.severity === ParserDiagnosticKind.Error
             );
