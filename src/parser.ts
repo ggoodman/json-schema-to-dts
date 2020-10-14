@@ -32,8 +32,8 @@ interface ParserCompileOptions {
 }
 
 interface ParserCompileTypeOptions {
-  isExported?: boolean;
   hasDeclareKeyword?: boolean;
+  isExported?: boolean;
 }
 
 export class Parser {
