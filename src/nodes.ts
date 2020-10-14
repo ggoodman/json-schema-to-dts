@@ -190,15 +190,21 @@ export class SchemaNode extends BaseSchemaNode<JSONSchema7, SchemaNodeOptions> {
 
     if (this.options.anyOf) {
       const unionTypeWriterFns: WriterFunction[] = [];
+      const unionValidatorWriterFns: WriterFunction[] = [];
 
       for (const node of this.options.anyOf) {
-        const { typeWriter } = node.provideWriters(ctx);
+        const { typeWriter, validatorWriter } = node.provideWriters(ctx);
         unionTypeWriterFns.push(typeWriter);
+        unionValidatorWriterFns.push(validatorWriter);
       }
 
-      if (unionTypeWriterFns.length) {
+      if (unionValidatorWriterFns.length) {
         typeWriters.push(createUnionTypeWriterFunction(unionTypeWriterFns));
       }
+
+      validatorWriters.push(
+        createValidatorWriterFunction('AnyOfValidator', unionValidatorWriterFns)
+      );
     }
 
     if (this.options.allOf) {
@@ -311,18 +317,33 @@ export class SchemaNode extends BaseSchemaNode<JSONSchema7, SchemaNodeOptions> {
     if (Array.isArray(this.schema.type)) {
       const results = this.schema.type.map(writeForTypeName);
       const unionTypeWriters: WriterFunction[] = [];
+      const unionValidatorWriters: WriterFunction[] = [];
 
       for (const { typeWriter, validatorWriter } of results) {
         unionTypeWriters.push(typeWriter);
-        validatorWriters.push(validatorWriter);
+        unionValidatorWriters.push(validatorWriter);
       }
 
       typeWriters.push(createUnionTypeWriterFunction(unionTypeWriters));
+      validatorWriters.push(createValidatorWriterFunction('AnyOfValidator', unionValidatorWriters));
     } else if (this.schema.type) {
       const { typeWriter, validatorWriter } = writeForTypeName(this.schema.type);
 
       typeWriters.push(typeWriter);
       validatorWriters.push(validatorWriter);
+    } else {
+      // We have no explicit type so we'll infer from assertions
+      if (
+        typeof this.schema.uniqueItems === 'boolean' ||
+        typeof this.schema.maxItems === 'number' ||
+        typeof this.schema.minItems === 'number' ||
+        this.options.contains
+      ) {
+        const { typeWriter, validatorWriter } = writeForTypeName('array');
+
+        typeWriters.push(typeWriter);
+        validatorWriters.push(validatorWriter);
+      }
     }
 
     if (!typeWriters.length) {

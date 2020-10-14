@@ -4,7 +4,9 @@ import { format } from 'prettier';
 import {
   IndentationText,
   ModuleKind,
+  NewLineKind,
   Project,
+  QuoteKind,
   ScriptTarget,
   VariableDeclarationKind,
 } from 'ts-morph';
@@ -20,6 +22,14 @@ import {
 import { IParserContext, ParserContext } from './parserContext';
 import { IReference } from './references';
 
+function hasAnyProperty<T, K extends keyof T>(value: T, ...keys: K[]): boolean {
+  for (const key of keys) {
+    if (key in value) return true;
+  }
+
+  return false;
+}
+
 export class Parser {
   private readonly ctx = new ParserContext();
   private readonly uriToTypeName = new Map<string, string>();
@@ -33,9 +43,9 @@ export class Parser {
     this.rootNodes.set(uri, node);
   }
 
-  compile() {
+  compile(options: { prettyPrint?: boolean } = {}) {
     const diagnostics = this.checkReferences();
-    const typeDefinitions = this.generateTypings();
+    const typeDefinitions = this.generateTypings(options);
 
     return {
       diagnostics,
@@ -134,7 +144,7 @@ export class Parser {
     return node;
   }
 
-  private generateTypings() {
+  private generateTypings(options: { prettyPrint?: boolean } = {}) {
     const liftedTypes = new Map<string, ISchemaNode>();
 
     const _ctx: ITypingContext = {
@@ -165,14 +175,21 @@ export class Parser {
       useInMemoryFileSystem: true,
       manipulationSettings: {
         indentationText: IndentationText.TwoSpaces,
+        useTrailingCommas: true,
+        newLineKind: NewLineKind.LineFeed,
+        quoteKind: QuoteKind.Single,
+        insertSpaceAfterOpeningAndBeforeClosingNonemptyBraces: true,
       },
     });
     const sourceFile = project.createSourceFile('schema.ts', Parser.boilerplate);
     const printed = new Set<ISchemaNode>();
+    const schemaRootNames = new Map<string, string>();
 
     for (const node of this.rootNodes.values()) {
       // Exported schemas should get first pick
       const name = this.generateDeconflictedName(node);
+
+      schemaRootNames.set(node.uri, name);
 
       const { typeWriter, validatorWriter } = node.provideWriters(_ctx);
 
@@ -205,6 +222,8 @@ export class Parser {
       if (!printed.has(node)) {
         printed.add(node);
 
+        schemaRootNames.set(node.uri, name);
+
         const { typeWriter, validatorWriter } = node.provideWriters(_ctx);
 
         sourceFile.addTypeAlias({
@@ -233,12 +252,15 @@ export class Parser {
     }
 
     const unformattedTypeScriptCode = sourceFile.print();
-    const formattedTypeScriptCode = format(unformattedTypeScriptCode, { filepath: 'schema.ts' });
+    const formattedTypeScriptCode = options.prettyPrint
+      ? format(unformattedTypeScriptCode, { filepath: 'schema.ts' })
+      : unformattedTypeScriptCode;
     const emitResult = project.emitToMemory();
 
     const result = {
       typeScript: formattedTypeScriptCode,
       javaScript: '',
+      schemaRootNames,
       typeDefinition: '',
     };
 
@@ -249,11 +271,15 @@ export class Parser {
     for (const file of emitResult.getFiles()) {
       switch (file.filePath) {
         case '/schema.js': {
-          result.javaScript = format(file.text, { filepath: file.filePath });
+          result.javaScript = options.prettyPrint
+            ? format(file.text, { filepath: file.filePath })
+            : file.text;
           break;
         }
         case '/schema.d.ts': {
-          result.typeDefinition = format(file.text, { filepath: file.filePath });
+          result.typeDefinition = options.prettyPrint
+            ? format(file.text, { filepath: file.filePath })
+            : file.text;
           break;
         }
         default:
@@ -332,6 +358,10 @@ function parseSchema(ctx: IParserContext, schema: JSONSchema7): ISchemaNode {
     }
   } else if (schema.type) {
     parseNodeForType(schema.type);
+  } else {
+    if (hasAnyProperty(schema, 'maxItems', 'minItems', 'uniqueItems', 'contains')) {
+      parseNodeForType('array');
+    }
   }
 
   if (typeof schema.if !== 'undefined') ctx.enterPath(['if'], schema.if, parseSchemaDefinition);

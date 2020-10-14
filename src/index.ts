@@ -15,6 +15,16 @@ async function main() {
   await Fs.writeFile(Path.resolve(__dirname, './schema.ts'), typeScript);
   await Fs.writeFile(Path.resolve(__dirname, './schema.js'), javaScript);
   await Fs.writeFile(Path.resolve(__dirname, './schema.d.ts'), typeDefinition);
+
+  const { CoreSchemaMetaSchemaCodec } = require('./schema.js');
+
+  CoreSchemaMetaSchemaCodec.assertValid(schema);
+  console.log('ok1');
+
+  schema.items = 'no-good';
+
+  CoreSchemaMetaSchemaCodec.assertValid(schema);
+  console.log('ok1');
 }
 
 main().catch((err) => {

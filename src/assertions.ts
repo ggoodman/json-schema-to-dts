@@ -46,6 +46,46 @@ type JSONSchema7Key =
   | 'writeOnly'
   | 'examples';
 
+interface IValidatorContext {
+  applyValidatorToChild(key: string, validator: IValidator): void;
+
+  assertionFailure(assertionKey: JSONSchema7Key, value: unknown, message: string): AssertionFailure;
+}
+
+interface IValidator {
+  assert(ctx: IValidatorContext, value: unknown): void;
+}
+
+class ValidatorContext implements IValidatorContext {
+  private readonly path: string[] = [];
+
+  constructor(private value: unknown) {}
+
+  applyValidatorToChild(key: string, validator: IValidator) {
+    const value = this.value;
+
+    if (typeof value === 'undefined') {
+      throw new Error(`Invariant violation: Unexpected undefined value in validation context`);
+    }
+
+    this.path.push(key);
+    this.value = (value as any)[key];
+
+    validator.assert(this, this.value);
+
+    this.path.pop();
+    this.value = value;
+  }
+
+  assertionFailure(
+    assertionKey: JSONSchema7Key,
+    value: unknown,
+    message: string
+  ): AssertionFailure {
+    return new AssertionFailure(assertionKey, message, this.path.slice(), value);
+  }
+}
+
 class Codec<T> {
   /**
    * @internal
@@ -57,22 +97,10 @@ class Codec<T> {
   }
 
   assertValid(value: unknown): asserts value is T {
-    //@ts-ignore
-    // TODO: Actually make this
-    const ctx: IValidatorContext = {};
+    const ctx = new ValidatorContext(value);
 
     this.validator.assert(ctx, value);
   }
-}
-
-interface IValidatorContext {
-  applyValidatorToChild(key: string, validator: IValidator): void;
-
-  assertionFailure(assertionKey: JSONSchema7Key, value: unknown, message: string): AssertionFailure;
-}
-
-interface IValidator {
-  assert(ctx: IValidatorContext, value: unknown): void;
 }
 
 class AssertionFailure {
@@ -84,10 +112,12 @@ class AssertionFailure {
 
   private readonly tag = AssertionFailure.tag;
 
-  readonly assertion!: JSONSchema7Key;
-  readonly message!: string;
-  readonly path!: string[];
-  readonly value!: JSONValue;
+  constructor(
+    readonly assertion: JSONSchema7Key,
+    readonly message: string,
+    readonly path: string[],
+    readonly value: unknown
+  ) {}
 }
 
 class AllOfValidator implements IValidator {
@@ -245,12 +275,13 @@ class ConstantValidator implements IValidator {
 }
 
 class DeferredReferenceValidator implements IValidator {
-  private validator: IValidator;
+  private validator: IValidator | undefined;
 
-  constructor(validatorFactory: () => IValidator) {
-    this.validator = validatorFactory();
-  }
+  constructor(private readonly validatorFactory: () => IValidator) {}
   assert(ctx: IValidatorContext, value: unknown) {
+    if (typeof this.validator === 'undefined') {
+      this.validator = this.validatorFactory();
+    }
     this.validator.assert(ctx, value);
   }
 }
