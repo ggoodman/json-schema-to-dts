@@ -1,6 +1,3 @@
-import { readFileSync } from 'fs';
-import { JSONSchema7, JSONSchema7Definition, JSONSchema7TypeName } from 'json-schema';
-import { format } from 'prettier';
 import {
   IndentationText,
   ModuleKind,
@@ -8,7 +5,6 @@ import {
   Project,
   QuoteKind,
   ScriptTarget,
-  VariableDeclarationKind,
 } from 'ts-morph';
 import { URL } from 'url';
 import { IParserDiagnostic, ParserDiagnosticKind } from './diagnostics';
@@ -21,13 +17,23 @@ import {
 } from './nodes';
 import { IParserContext, ParserContext } from './parserContext';
 import { IReference } from './references';
+import { JSONSchema7, JSONSchema7Definition, JSONSchema7TypeName } from './types';
 
-function hasAnyProperty<T, K extends keyof T>(value: T, ...keys: K[]): boolean {
-  for (const key of keys) {
-    if (key in value) return true;
-  }
+interface ParserCompileOptions {
+  /**
+   * Declaration options for the top-level schemas in each added schema file.
+   */
+  topLevel?: ParserCompileTypeOptions;
 
-  return false;
+  /**
+   * Declaration options for the sub-schemas depended-upon by the top-level schemas.
+   */
+  lifted?: ParserCompileTypeOptions;
+}
+
+interface ParserCompileTypeOptions {
+  isExported?: boolean;
+  hasDeclareKeyword?: boolean;
 }
 
 export class Parser {
@@ -36,20 +42,18 @@ export class Parser {
   private readonly uriByTypeName = new Map<string, string>();
   private readonly rootNodes = new Map<string, ISchemaNode>();
 
-  private static boilerplate = readFileSync(`${__dirname}/assertions.ts`, 'utf-8');
-
   addSchema(uri: string, schema: JSONSchema7Definition) {
     const node = this.ctx.enterUri(uri, schema, parseSchemaDefinition);
     this.rootNodes.set(uri, node);
   }
 
-  compile(options: { prettyPrint?: boolean } = {}) {
+  compile(options: ParserCompileOptions = {}) {
     const diagnostics = this.checkReferences();
-    const typeDefinitions = this.generateTypings(options);
+    const text = this.generateTypings(options);
 
     return {
       diagnostics,
-      ...typeDefinitions,
+      text,
     };
   }
 
@@ -144,10 +148,9 @@ export class Parser {
     return node;
   }
 
-  private generateTypings(options: { prettyPrint?: boolean } = {}) {
+  private generateTypings(options: ParserCompileOptions) {
     const liftedTypes = new Map<string, ISchemaNode>();
-
-    const _ctx: ITypingContext = {
+    const ctx: ITypingContext = {
       getNameForReference: (ref: IReference) => {
         const node = this.getNodeByReference(ref);
         const name = this.generateDeconflictedName(node);
@@ -181,38 +184,27 @@ export class Parser {
         insertSpaceAfterOpeningAndBeforeClosingNonemptyBraces: true,
       },
     });
-    const sourceFile = project.createSourceFile('schema.ts', Parser.boilerplate);
+    const sourceFile = project.createSourceFile(
+      'schema.ts',
+      `
+type JSONPrimitive = boolean | null | number | string;
+type JSONValue = JSONPrimitive | JSONValue[] | { [key: string]: JSONValue };
+      `.trim() + '\n'
+    );
     const printed = new Set<ISchemaNode>();
-    const schemaRootNames = new Map<string, string>();
 
     for (const node of this.rootNodes.values()) {
       // Exported schemas should get first pick
       const name = this.generateDeconflictedName(node);
-
-      schemaRootNames.set(node.uri, name);
-
-      const { typeWriter, validatorWriter } = node.provideWriters(_ctx);
+      const writerFunction = node.provideWriterFunction(ctx);
+      const docs = node.provideDocs();
 
       sourceFile.addTypeAlias({
-        name: this.generateDeconflictedName(node),
-        // docs: assertion.docsWriter && [{ description: assertion.docsWriter }],
-        type: typeWriter,
-        isExported: true,
-      });
-      sourceFile.addVariableStatement({
-        declarationKind: VariableDeclarationKind.Const,
-        declarations: [
-          {
-            name: `${name}Codec`,
-            initializer: (writer) => {
-              writer.write(`new Codec<${name}>(`);
-              validatorWriter(writer);
-              writer.write(`)`);
-            },
-            type: `Codec<${name}>`,
-          },
-        ],
-        isExported: true,
+        name,
+        docs: docs ? [docs] : undefined,
+        type: writerFunction,
+        isExported: options.topLevel?.isExported ?? true,
+        hasDeclareKeyword: options.topLevel?.hasDeclareKeyword ?? false,
       });
 
       printed.add(node);
@@ -222,73 +214,30 @@ export class Parser {
       if (!printed.has(node)) {
         printed.add(node);
 
-        schemaRootNames.set(node.uri, name);
-
-        const { typeWriter, validatorWriter } = node.provideWriters(_ctx);
+        const writerFunction = node.provideWriterFunction(ctx);
+        const docs = node.provideDocs();
 
         sourceFile.addTypeAlias({
           name,
-          // docs: assertion.docsWriter && [{ description: assertion.docsWriter }],
-          type: typeWriter,
-          isExported: false,
-        });
-
-        sourceFile.addVariableStatement({
-          declarationKind: VariableDeclarationKind.Const,
-          declarations: [
-            {
-              name: `${name}Codec`,
-              initializer: (writer) => {
-                writer.write(`new Codec<${name}>(`);
-                validatorWriter(writer);
-                writer.write(`)`);
-              },
-              type: `Codec<${name}>`,
-            },
-          ],
-          isExported: true,
+          docs: docs ? [docs] : undefined,
+          type: writerFunction,
+          isExported: options.lifted?.isExported ?? options.topLevel?.isExported ?? true,
+          hasDeclareKeyword:
+            options.lifted?.hasDeclareKeyword ?? options.topLevel?.hasDeclareKeyword ?? false,
         });
       }
     }
 
-    const unformattedTypeScriptCode = sourceFile.print();
-    const formattedTypeScriptCode = options.prettyPrint
-      ? format(unformattedTypeScriptCode, { filepath: 'schema.ts' })
-      : unformattedTypeScriptCode;
-    const emitResult = project.emitToMemory();
-
-    const result = {
-      typeScript: formattedTypeScriptCode,
-      javaScript: '',
-      schemaRootNames,
-      typeDefinition: '',
-    };
-
-    for (const diagnostic of emitResult.getDiagnostics()) {
-      console.log(diagnostic.getMessageText());
-    }
-
-    for (const file of emitResult.getFiles()) {
-      switch (file.filePath) {
-        case '/schema.js': {
-          result.javaScript = options.prettyPrint
-            ? format(file.text, { filepath: file.filePath })
-            : file.text;
-          break;
-        }
-        case '/schema.d.ts': {
-          result.typeDefinition = options.prettyPrint
-            ? format(file.text, { filepath: file.filePath })
-            : file.text;
-          break;
-        }
-        default:
-          throw new Error(`Invariant error: Project emitted an unexpected file ${file.filePath}`);
-      }
-    }
-
-    return result;
+    return sourceFile.print();
   }
+}
+
+function hasAnyProperty<T, K extends keyof T>(value: T, ...keys: K[]): boolean {
+  for (const key of keys) {
+    if (key in value) return true;
+  }
+
+  return false;
 }
 
 function parseSchemaDefinition(ctx: IParserContext, schema: JSONSchema7Definition): ISchemaNode {
@@ -481,7 +430,7 @@ function visitAsObject(ctx: IParserContext, schema: JSONSchema7, o: SchemaNodeOp
   }
 
   const additionalProperties = schema.additionalProperties;
-  if (typeof additionalProperties !== 'undefined') {
+  if (typeof additionalProperties !== 'undefined' && additionalProperties !== false) {
     o.additionalProperties = ctx.enterPath(
       ['additionalProperties'],
       additionalProperties,

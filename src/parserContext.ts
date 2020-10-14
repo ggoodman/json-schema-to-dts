@@ -1,8 +1,8 @@
-import { JSONSchema7Definition } from 'json-schema';
 import { URL } from 'url';
 import { IParserDiagnostic, ParserDiagnosticKind } from './diagnostics';
 import { ISchemaNode } from './nodes';
 import { IReference } from './references';
+import { CoreSchemaMetaSchema } from './schema';
 import { resolveRelativeJSONPath, resolveRelativeUri } from './uris';
 
 export interface IParserContext {
@@ -16,11 +16,11 @@ export interface IParserContext {
 
   enterPath(
     path: [string, ...string[]],
-    schema: JSONSchema7Definition,
-    fn: (ctx: IParserContext, schema: JSONSchema7Definition) => ISchemaNode
+    schema: CoreSchemaMetaSchema,
+    fn: (ctx: IParserContext, schema: CoreSchemaMetaSchema) => ISchemaNode
   ): ISchemaNode;
 
-  enterSchemaNode(schema: JSONSchema7Definition, fn: () => ISchemaNode): ISchemaNode;
+  enterSchemaNode(schema: CoreSchemaMetaSchema, fn: () => ISchemaNode): ISchemaNode;
 }
 
 export class ParserContext implements IParserContext {
@@ -28,7 +28,7 @@ export class ParserContext implements IParserContext {
   uri: string = '';
 
   readonly diagnostics: IParserDiagnostic[] = [];
-  readonly schemasByUri = new Map<string, JSONSchema7Definition>();
+  readonly schemasByUri = new Map<string, CoreSchemaMetaSchema>();
   readonly nodesByUri = new Map<string, ISchemaNode>();
   readonly references = new Set<IReference>();
 
@@ -62,8 +62,8 @@ export class ParserContext implements IParserContext {
 
   enterUri(
     enteredUri: string,
-    schema: JSONSchema7Definition,
-    fn: (ctx: IParserContext, schema: JSONSchema7Definition) => ISchemaNode
+    schema: CoreSchemaMetaSchema,
+    fn: (ctx: IParserContext, schema: CoreSchemaMetaSchema) => ISchemaNode
   ) {
     const uri = this.uri;
     const baseUri = this.baseUri;
@@ -83,8 +83,8 @@ export class ParserContext implements IParserContext {
 
   enterPath(
     path: [string, ...string[]],
-    schema: JSONSchema7Definition,
-    fn: (ctx: IParserContext, schema: JSONSchema7Definition) => ISchemaNode
+    schema: CoreSchemaMetaSchema,
+    fn: (ctx: IParserContext, schema: CoreSchemaMetaSchema) => ISchemaNode
   ): ISchemaNode {
     const uri = this.uri;
     const baseUri = this.baseUri;
@@ -100,7 +100,7 @@ export class ParserContext implements IParserContext {
     return node;
   }
 
-  enterSchemaNode(schema: JSONSchema7Definition, fn: () => ISchemaNode): ISchemaNode {
+  enterSchemaNode(schema: CoreSchemaMetaSchema, fn: () => ISchemaNode): ISchemaNode {
     const uri = this.uri;
     const baseUri = this.baseUri;
 

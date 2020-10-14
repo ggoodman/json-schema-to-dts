@@ -1,35 +1,28 @@
 import {
-  JSONSchema7,
-  JSONSchema7Definition,
-  JSONSchema7Type,
-  JSONSchema7TypeName,
-  JSONSchema7Version,
-} from 'json-schema';
-import {
   CodeBlockWriter,
-  TypeElementMemberedNodeStructure,
+  IndexSignatureDeclarationStructure,
+  JSDocStructure,
+  JSDocTagStructure,
+  OptionalKind,
+  PropertySignatureStructure,
   WriterFunction,
   Writers,
 } from 'ts-morph';
 import { IReference } from './references';
+import { JSONSchema7, JSONSchema7Definition, JSONSchema7Type, JSONSchema7TypeName } from './types';
 
 export interface ITypingContext {
   getNameForReference(ref: IReference): string;
 }
 
-export interface ICodegenContext {
-  getNameForReference(ref: IReference): string;
-}
-
-export interface ISchemaNode {
+export interface ISchemaNode<T extends JSONSchema7Definition = JSONSchema7Definition> {
   readonly kind: SchemaNodeKind;
   readonly baseUri: string;
-  readonly schema: JSONSchema7Definition;
+  readonly schema: T;
   readonly uri: string;
 
-  provideWriters(
-    ctx: ITypingContext
-  ): { typeWriter: WriterFunction; validatorWriter: WriterFunction };
+  provideWriterFunction(ctx: ITypingContext): WriterFunction;
+  provideDocs(): OptionalKind<JSDocStructure> | undefined;
 }
 
 export enum SchemaNodeKind {
@@ -40,7 +33,7 @@ export enum SchemaNodeKind {
 export interface SchemaNodeOptions {
   $id?: string;
   $ref?: IReference;
-  $schema?: JSONSchema7Version;
+  $schema?: string;
   $comment?: string;
 
   /**
@@ -138,7 +131,8 @@ export interface SchemaNodeOptions {
   examples?: JSONSchema7Type;
 }
 
-abstract class BaseSchemaNode<TSchema, TOptions = undefined> implements ISchemaNode {
+abstract class BaseSchemaNode<TSchema extends JSONSchema7Definition, TOptions = undefined>
+  implements ISchemaNode<TSchema> {
   abstract readonly kind: SchemaNodeKind;
 
   constructor(
@@ -148,165 +142,112 @@ abstract class BaseSchemaNode<TSchema, TOptions = undefined> implements ISchemaN
     protected readonly options: TOptions
   ) {}
 
-  abstract provideWriters(
-    ctx: ITypingContext
-  ): { typeWriter: WriterFunction; validatorWriter: WriterFunction };
+  provideDocs(): OptionalKind<JSDocStructure> | undefined {
+    return undefined;
+  }
+
+  abstract provideWriterFunction(ctx: ITypingContext): WriterFunction;
 }
 
 export class BooleanSchemaNode extends BaseSchemaNode<boolean> {
   readonly kind = SchemaNodeKind.Boolean;
 
-  provideWriters(
-    _ctx: ITypingContext
-  ): { typeWriter: WriterFunction; validatorWriter: WriterFunction } {
-    return {
-      typeWriter: createLiteralWriterFunction(this.schema ? 'unknown' : 'never'),
-      validatorWriter: createLiteralWriterFunction(
-        `new ConstantValidator(${JSON.stringify(this.schema)})`
-      ),
-    };
+  provideWriterFunction(_ctx: ITypingContext): WriterFunction {
+    return createLiteralWriterFunction(this.schema ? 'JSONValue' : 'never');
   }
 }
 
 export class SchemaNode extends BaseSchemaNode<JSONSchema7, SchemaNodeOptions> {
   readonly kind = SchemaNodeKind.Schema;
 
-  provideWriters(
-    ctx: ITypingContext
-  ): { typeWriter: WriterFunction; validatorWriter: WriterFunction } {
+  provideDocs() {
+    const lines: string[] = [];
+    const tags: OptionalKind<JSDocTagStructure>[] = [];
+
+    if (this.schema.title) {
+      lines.push(this.schema.title);
+    }
+
+    if (this.schema.description) {
+      lines.push(this.schema.description);
+    }
+
+    if (this.schema.$id) {
+      tags.push({ tagName: 'see', text: this.schema.$id });
+    }
+
+    if (!lines.length && !tags.length) {
+      return;
+    }
+
+    return {
+      description: lines.join('\n\n'),
+      tags,
+    };
+  }
+
+  provideWriterFunction(ctx: ITypingContext): WriterFunction {
     const typeWriters: WriterFunction[] = [];
-    const validatorWriters: WriterFunction[] = [];
 
     if (this.options.$ref) {
       const targetTypeName = ctx.getNameForReference(this.options.$ref);
 
       typeWriters.push(createLiteralWriterFunction(targetTypeName));
-      validatorWriters.push(
-        createLiteralWriterFunction(
-          `new DeferredReferenceValidator(() => ${targetTypeName}Codec.validator)`
-        )
-      );
     }
 
     if (this.options.anyOf) {
-      const unionTypeWriterFns: WriterFunction[] = [];
-      const unionValidatorWriterFns: WriterFunction[] = [];
+      const writerFunctions = this.options.anyOf.map((node) => node.provideWriterFunction(ctx));
 
-      for (const node of this.options.anyOf) {
-        const { typeWriter, validatorWriter } = node.provideWriters(ctx);
-        unionTypeWriterFns.push(typeWriter);
-        unionValidatorWriterFns.push(validatorWriter);
+      if (writerFunctions.length) {
+        typeWriters.push(createUnionTypeWriterFunction(writerFunctions));
       }
-
-      if (unionValidatorWriterFns.length) {
-        typeWriters.push(createUnionTypeWriterFunction(unionTypeWriterFns));
-      }
-
-      validatorWriters.push(
-        createValidatorWriterFunction('AnyOfValidator', unionValidatorWriterFns)
-      );
     }
 
     if (this.options.allOf) {
-      const allOfTypeWriters: WriterFunction[] = [];
-      const allOfValidatorWriters: WriterFunction[] = [];
+      const writerFunctions = this.options.allOf.map((node) => node.provideWriterFunction(ctx));
 
-      for (const node of this.options.allOf) {
-        const { typeWriter, validatorWriter } = node.provideWriters(ctx);
-
-        allOfTypeWriters.push(typeWriter);
-        allOfValidatorWriters.push(validatorWriter);
+      if (writerFunctions.length) {
+        typeWriters.push(createIntersectionTypeWriterFunction(writerFunctions));
       }
-
-      typeWriters.push(createIntersectionTypeWriterFunction(allOfTypeWriters));
-      validatorWriters.push(createValidatorWriterFunction('AllOfValidator', allOfValidatorWriters));
     }
 
     if (this.options.oneOf) {
-      const oneOfTypeWriters: WriterFunction[] = [];
-      const oneOfValidatorWriters: WriterFunction[] = [];
+      const writerFunctions = this.options.oneOf.map((node) => node.provideWriterFunction(ctx));
 
-      for (const node of this.options.oneOf) {
-        const { typeWriter, validatorWriter } = node.provideWriters(ctx);
-
-        oneOfTypeWriters.push(typeWriter);
-        oneOfValidatorWriters.push(validatorWriter);
+      if (writerFunctions.length) {
+        typeWriters.push(createUnionTypeWriterFunction(writerFunctions));
       }
-
-      typeWriters.push(createUnionTypeWriterFunction(oneOfTypeWriters));
-      validatorWriters.push(createValidatorWriterFunction('OneOfValidator', oneOfValidatorWriters));
     }
 
-    if (this.options.items) {
+    if (typeof this.schema.const !== 'undefined') {
+      typeWriters.push(createLiteralWriterFunction(JSON.stringify(this.schema.const)));
     }
 
     if (this.schema.enum) {
-      const union: WriterFunction[] = [];
+      const unionWriters: WriterFunction[] = this.schema.enum.map((value) =>
+        createLiteralWriterFunction(JSON.stringify(value))
+      );
 
-      for (const value of this.schema.enum) {
-        union.push(createLiteralWriterFunction(JSON.stringify(value)));
-      }
-
-      if (union.length) {
-        typeWriters.push(
-          union.length > 1
-            ? Writers.unionType(...(union as [WriterFunction, WriterFunction]))
-            : union[0]
-        );
+      if (unionWriters.length) {
+        typeWriters.push(createUnionTypeWriterFunction(unionWriters));
       }
     }
 
-    // TODO: Fix this to return a typeWriter and validatorWriter so that alternatives are not treated as an intersection when type is an array
-    const writeForTypeName = (
-      typeName: JSONSchema7TypeName
-    ): { typeWriter: WriterFunction; validatorWriter: WriterFunction } => {
+    const writeForTypeName = (typeName: JSONSchema7TypeName): WriterFunction => {
       switch (typeName) {
-        case 'array': {
+        case 'array':
           return this.provideWritersForTypeArray(ctx);
-        }
-        case 'boolean': {
-          return {
-            typeWriter: createLiteralWriterFunction('boolean'),
-            validatorWriter: createLiteralWriterFunction('new BooleanTypeValidator()'),
-          };
-        }
-        case 'null': {
-          return {
-            typeWriter: createLiteralWriterFunction('null'),
-            validatorWriter: createLiteralWriterFunction('new NullTypeValidator()'),
-          };
-        }
-        case 'object': {
+        case 'boolean':
+          return createLiteralWriterFunction('boolean');
+        case 'null':
+          return createLiteralWriterFunction('null');
+        case 'object':
           return this.provideWritersForTypeObject(ctx);
-        }
         case 'integer':
-        case 'number': {
-          return {
-            typeWriter: createLiteralWriterFunction('number'),
-            validatorWriter: createLiteralWriterFunction(
-              `new NumberTypeValidator(${JSON.stringify({
-                type: this.schema.type,
-                multipleOf: this.schema.multipleOf,
-                maximum: this.schema.maximum,
-                exclusiveMaximum: this.schema.exclusiveMaximum,
-                minimum: this.schema.minimum,
-                exclusiveMinimum: this.schema.exclusiveMinimum,
-              })})`
-            ),
-          };
-        }
-        case 'string': {
-          return {
-            typeWriter: createLiteralWriterFunction('string'),
-            validatorWriter: createLiteralWriterFunction(
-              `new StringTypeValidator(${JSON.stringify({
-                maxLength: this.schema.maxLength,
-                minLength: this.schema.minLength,
-                pattern: this.schema.pattern,
-              })})`
-            ),
-          };
-        }
+        case 'number':
+          return createLiteralWriterFunction('number');
+        case 'string':
+          return createLiteralWriterFunction('string');
         default:
           throw new Error(
             `Invariant violation: Unable to handle unknown type name ${JSON.stringify(typeName)}`
@@ -315,22 +256,13 @@ export class SchemaNode extends BaseSchemaNode<JSONSchema7, SchemaNodeOptions> {
     };
 
     if (Array.isArray(this.schema.type)) {
-      const results = this.schema.type.map(writeForTypeName);
-      const unionTypeWriters: WriterFunction[] = [];
-      const unionValidatorWriters: WriterFunction[] = [];
+      const writerFunctions = this.schema.type.map(writeForTypeName);
 
-      for (const { typeWriter, validatorWriter } of results) {
-        unionTypeWriters.push(typeWriter);
-        unionValidatorWriters.push(validatorWriter);
-      }
-
-      typeWriters.push(createUnionTypeWriterFunction(unionTypeWriters));
-      validatorWriters.push(createValidatorWriterFunction('AnyOfValidator', unionValidatorWriters));
+      typeWriters.push(createUnionTypeWriterFunction(writerFunctions));
     } else if (this.schema.type) {
-      const { typeWriter, validatorWriter } = writeForTypeName(this.schema.type);
+      const typeWriter = writeForTypeName(this.schema.type);
 
       typeWriters.push(typeWriter);
-      validatorWriters.push(validatorWriter);
     } else {
       // We have no explicit type so we'll infer from assertions
       if (
@@ -339,82 +271,43 @@ export class SchemaNode extends BaseSchemaNode<JSONSchema7, SchemaNodeOptions> {
         typeof this.schema.minItems === 'number' ||
         this.options.contains
       ) {
-        const { typeWriter, validatorWriter } = writeForTypeName('array');
-
-        typeWriters.push(typeWriter);
-        validatorWriters.push(validatorWriter);
+        typeWriters.push(writeForTypeName('array'));
       }
     }
 
     if (!typeWriters.length) {
-      typeWriters.push(createLiteralWriterFunction('unknown'));
+      typeWriters.push(createLiteralWriterFunction('JSONValue'));
     }
 
-    if (!validatorWriters.length) {
-      validatorWriters.push(
-        createLiteralWriterFunction(`new ConstantValidator(${JSON.stringify(true)})`)
-      );
-    }
+    return createIntersectionTypeWriterFunction(typeWriters);
+  }
 
-    return {
-      typeWriter: createIntersectionTypeWriterFunction(typeWriters),
-      validatorWriter:
-        validatorWriters.length > 1
-          ? createValidatorWriterFunction('AllOfValidator', validatorWriters)
-          : validatorWriters[0],
+  private provideWritersForTuple(ctx: ITypingContext, items: ISchemaNode[]): WriterFunction {
+    return (writer) => {
+      writer.write('[');
+
+      for (let i = 0; i < items.length; i++) {
+        const typeWriter = items[i].provideWriterFunction(ctx);
+
+        if (i > 0) {
+          writer.write(',');
+        }
+
+        typeWriter(writer);
+      }
+
+      if (this.options.additionalItems) {
+        const typeWriter = this.options.additionalItems.provideWriterFunction(ctx);
+
+        writer.write('...'), typeWriter(writer);
+        writer.write('[]');
+      }
+
+      writer.write(']');
     };
   }
 
-  private provideWritersForTuple(ctx: ITypingContext, items: ISchemaNode[]) {
-    const typeWriterFns: WriterFunction[] = [createLiteralWriterFunction('[')];
-    const validatorOptions: {
-      items: WriterFunction[];
-      additionalItems?: WriterFunction;
-    } = {
-      items: [],
-    };
-
-    for (let i = 0; i < items.length; i++) {
-      const enumItem = items[i];
-      const { typeWriter, validatorWriter } = enumItem.provideWriters(ctx);
-
-      validatorOptions.items.push(validatorWriter);
-
-      if (i > 0) {
-        typeWriterFns.push(createLiteralWriterFunction(','));
-      }
-
-      typeWriterFns.push(typeWriter);
-    }
-
-    if (this.options.additionalItems) {
-      const { typeWriter, validatorWriter } = this.options.additionalItems.provideWriters(ctx);
-
-      typeWriterFns.push(
-        createLiteralWriterFunction('...'),
-        typeWriter,
-        createLiteralWriterFunction('[]')
-      );
-
-      validatorOptions.additionalItems = validatorWriter;
-    }
-
-    typeWriterFns.push(createLiteralWriterFunction(']'));
-
-    const typeWriter: WriterFunction = (writer) => {
-      for (const writerFn of typeWriterFns) {
-        writerFn(writer);
-      }
-    };
-    const validatorWriter = createValidatorWriterFunction('TupleValidator', validatorOptions);
-
-    return {
-      typeWriter,
-      validatorWriter,
-    };
-  }
-
-  private provideWritersForTypeArray(ctx: ITypingContext) {
+  private provideWritersForTypeArray(ctx: ITypingContext): WriterFunction {
     const items = this.options.items;
 
     if (Array.isArray(items)) {
@@ -423,147 +316,77 @@ export class SchemaNode extends BaseSchemaNode<JSONSchema7, SchemaNodeOptions> {
 
     let typeWriter = createLiteralWriterFunction('unknown[]');
 
-    const validatorWriterOptions: {
-      items?: WriterFunction;
-      maxItems?: number;
-      minItems?: number;
-      uniqueItems?: boolean;
-      contains?: WriterFunction;
-    } = {
-      maxItems: this.schema.maxItems,
-      minItems: this.schema.minItems,
-      uniqueItems: this.schema.uniqueItems,
-    };
-
     if (items) {
-      const {
-        typeWriter: itemsTypeWriter,
-        validatorWriter: itemsValidatorWriter,
-      } = items.provideWriters(ctx);
+      const writerFunction = items.provideWriterFunction(ctx);
 
-      typeWriter = (arrayWriter) => {
-        arrayWriter.write('(');
-        itemsTypeWriter(arrayWriter);
-        arrayWriter.write(')[]');
+      typeWriter = (writer) => {
+        writer.write('(');
+        writerFunction(writer);
+        writer.write(')[]');
       };
-
-      validatorWriterOptions.items = itemsValidatorWriter;
     }
 
-    if (this.options.contains) {
-      const { validatorWriter } = this.options.contains.provideWriters(ctx);
-
-      validatorWriterOptions.contains = validatorWriter;
-    }
-
-    const validatorWriter = createValidatorWriterFunction(
-      'ArrayTypeValidator',
-      validatorWriterOptions
-    );
-
-    return {
-      typeWriter,
-      validatorWriter,
-    };
+    return typeWriter;
   }
 
-  private provideWritersForTypeObject(ctx: ITypingContext) {
+  private provideWritersForTypeObject(ctx: ITypingContext): WriterFunction {
     const required = new Set(this.schema.required);
-    const typeElement: TypeElementMemberedNodeStructure = {};
-    const objectValidatorOptions: {
-      maxProperties?: WriterFunction;
-      minProperties?: WriterFunction;
-      required?: WriterFunction;
-      properties?: {
-        [key: string]: WriterFunction;
-      };
-      patternProperties?: {
-        [key: string]: WriterFunction;
-      };
-      additionalProperties?: WriterFunction;
-      dependencies?: {
-        [key: string]: WriterFunction;
-      };
-      propertyNames?: WriterFunction;
-    } = {};
-
-    if (typeof this.schema.maxProperties === 'number') {
-      objectValidatorOptions.maxProperties = createLiteralWriterFunction(
-        JSON.stringify(this.schema.maxProperties)
-      );
-    }
-    if (typeof this.schema.minProperties === 'number') {
-      objectValidatorOptions.minProperties = createLiteralWriterFunction(
-        JSON.stringify(this.schema.minProperties)
-      );
-    }
-    if (
-      Array.isArray(this.schema.required) &&
-      this.schema.required.every((item) => typeof item === 'string')
-    ) {
-      objectValidatorOptions.required = createLiteralWriterFunction(
-        JSON.stringify(this.schema.required)
-      );
-    }
+    const writers: WriterFunction[] = [];
 
     if (this.options.properties) {
-      objectValidatorOptions.properties = {};
-
-      typeElement.properties ??= [];
+      const properties: OptionalKind<PropertySignatureStructure>[] = [];
 
       for (const name in this.options.properties) {
-        const { typeWriter, validatorWriter } = this.options.properties[name].provideWriters(ctx);
-        typeElement.properties.push({
+        const typeWriter = this.options.properties[name].provideWriterFunction(ctx);
+        properties.push({
           name,
-          hasQuestionToken: required.has(name),
+          hasQuestionToken: !required.has(name),
           type: typeWriter,
         });
+      }
 
-        objectValidatorOptions.properties[name] = validatorWriter;
+      if (properties.length) {
+        writers.push(Writers.objectType({ properties }));
       }
     }
 
+    const indexSignatures: OptionalKind<IndexSignatureDeclarationStructure>[] = [];
+
     if (this.options.additionalProperties) {
-      typeElement.indexSignatures ??= [];
+      const typeWriter = this.options.additionalProperties.provideWriterFunction(ctx);
 
-      const { typeWriter, validatorWriter } = this.options.additionalProperties.provideWriters(ctx);
-
-      typeElement.indexSignatures.push({
+      indexSignatures.push({
         keyName: 'additionalProperties',
         keyType: 'string',
         returnType: typeWriter,
       });
-
-      objectValidatorOptions.additionalProperties = validatorWriter;
     }
 
     if (this.options.patternProperties) {
-      objectValidatorOptions.patternProperties = {};
-      typeElement.indexSignatures ??= [];
-
       for (const name in this.options.patternProperties) {
-        const { typeWriter, validatorWriter } = this.options.patternProperties[name].provideWriters(
-          ctx
-        );
+        const typeWriter = this.options.patternProperties[name].provideWriterFunction(ctx);
 
-        typeElement.indexSignatures.push({
+        indexSignatures.push({
           keyName: 'patternProperties',
           keyType: 'string',
           returnType: typeWriter,
         });
-
-        objectValidatorOptions.patternProperties[name] = validatorWriter;
       }
     }
 
-    return {
-      typeWriter: Writers.objectType(typeElement),
-      validatorWriter: createValidatorWriterFunction('ObjectTypeValidator', objectValidatorOptions),
-    };
+    if (indexSignatures.length) {
+      writers.push(Writers.objectType({ indexSignatures }));
+    }
+
+    if (!writers.length) {
+      writers.push(createLiteralWriterFunction(`{ [property: string]: JSONValue }`));
+    }
+
+    return createIntersectionTypeWriterFunction(writers);
   }
 }
 
-function createIntersectionTypeWriterFunction(options: WriterFunction[]) {
+function createIntersectionTypeWriterFunction(options: WriterFunction[]): WriterFunction {
   if (!options.length) {
     throw new Error(`Invariant violation: options should always have length > 0`);
   }
@@ -572,22 +395,18 @@ function createIntersectionTypeWriterFunction(options: WriterFunction[]) {
     return options[0];
   }
 
-  return Writers.intersectionType(...(options as [WriterFunction, WriterFunction]));
+  const writerFn = Writers.intersectionType(...(options as [WriterFunction, WriterFunction]));
+
+  return (writer) => {
+    writer.write('(');
+    writerFn(writer);
+    writer.write(')');
+  };
 }
+
 function createLiteralWriterFunction(value: string): WriterFunction {
   return (writer: CodeBlockWriter) => writer.write(value);
 }
-
-type ObjectWriter =
-  | {
-      [key: string]: ObjectWriter | ObjectWriter[] | WriterFunction | undefined;
-    }
-  | ObjectWriter[]
-  | WriterFunction
-  | boolean
-  | null
-  | number
-  | string;
 
 function createUnionTypeWriterFunction(options: WriterFunction[]): WriterFunction {
   if (!options.length) {
@@ -598,67 +417,11 @@ function createUnionTypeWriterFunction(options: WriterFunction[]): WriterFunctio
     return options[0];
   }
 
-  return Writers.unionType(...(options as [WriterFunction, WriterFunction]));
-}
-
-function createValidatorWriterFunction(
-  validatorClass: string,
-  options: ObjectWriter
-): WriterFunction {
-  const flattenedOptions = flattenWriters(options);
+  const writerFn = Writers.unionType(...(options as [WriterFunction, WriterFunction]));
 
   return (writer) => {
-    writer.write(`new ${validatorClass}(`);
-    flattenedOptions(writer);
-    writer.write(`)`);
+    writer.write('(');
+    writerFn(writer);
+    writer.write(')');
   };
-}
-
-function flattenWriters(options: ObjectWriter): WriterFunction {
-  if (typeof options === 'function') {
-    return options;
-  }
-
-  if (typeof options === 'boolean') {
-    return createLiteralWriterFunction(JSON.stringify(options));
-  }
-
-  if (options === null) {
-    return createLiteralWriterFunction(JSON.stringify(options));
-  }
-
-  if (typeof options === 'number') {
-    return createLiteralWriterFunction(JSON.stringify(options));
-  }
-
-  if (typeof options === 'string') {
-    return createLiteralWriterFunction(options);
-  }
-
-  if (Array.isArray(options)) {
-    const childWriterFns = options.map(flattenWriters);
-
-    return (writer) => {
-      writer.write('[');
-      for (let i = 0; i < childWriterFns.length; i++) {
-        if (i > 0) {
-          writer.write(', ');
-        }
-
-        childWriterFns[i](writer);
-      }
-      writer.write(']');
-    };
-  }
-
-  const childWriterFns: { [key: string]: WriterFunction } = {};
-
-  for (const key in options) {
-    const child = options[key];
-    if (child) {
-      childWriterFns[key] = flattenWriters(child);
-    }
-  }
-
-  return Writers.object(childWriterFns);
 }

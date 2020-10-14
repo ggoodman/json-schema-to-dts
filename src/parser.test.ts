@@ -1,17 +1,16 @@
 import * as Fs from 'fs';
-import { JSONSchema7Definition } from 'json-schema';
 import * as Path from 'path';
 import { URL } from 'url';
-import * as Vm from 'vm';
 import { ParserDiagnosticKind } from './diagnostics';
 import { Parser } from './parser';
+import { JSONSchema7Definition } from './types';
 
 const baseRemoteUrl = new URL('http://localhost:1234/');
 const testCasesPackageDir = Path.dirname(require.resolve('json-schema-test-suite/package.json'));
 const testCasesDir = Path.join(testCasesPackageDir, 'tests/draft7');
 const testCasesEntries = Fs.readdirSync(testCasesDir, { withFileTypes: true });
 const suite = testCasesEntries
-  .filter((entry) => entry.isFile() && entry.name.endsWith('uniqueItems.json'))
+  .filter((entry) => entry.isFile() && entry.name.endsWith('.json'))
   .map((entry) => {
     const contents = Fs.readFileSync(Path.join(testCasesDir, entry.name), 'utf-8');
     const cases = JSON.parse(contents) as Array<{
@@ -27,7 +26,7 @@ const suite = testCasesEntries
     };
   });
 const draft07Schema = JSON.parse(
-  Fs.readFileSync(Path.join(__dirname, '../spec/json-schema-draft-07.json'), 'utf-8')
+  Fs.readFileSync(Path.join(__dirname, '../scripts/json-schema-draft-07.json'), 'utf-8')
 ) as JSONSchema7Definition;
 const remoteDir = Path.join(testCasesPackageDir, 'remotes');
 const remoteSchemas: Array<{ schema: JSONSchema7Definition; uri: string }> = [
@@ -71,7 +70,7 @@ describe.each(matrix)('%s', (_name, cases, uri) => {
     typeof suite[number]['cases'][number]['tests']
   ][] = cases.map(({ description, schema, tests }) => [description, schema, tests]);
 
-  describe.each(matrix)('%s', (_name, schema, tests) => {
+  it.each(matrix)('%s', (_name, schema, tests) => {
     const parser = new Parser();
 
     remoteSchemas.forEach(({ schema, uri }) => parser.addSchema(uri, schema));
@@ -84,37 +83,5 @@ describe.each(matrix)('%s', (_name, cases, uri) => {
     );
 
     expect(errorDiagnostics).toHaveLength(0);
-
-    const matrix: [string, unknown, boolean][] = tests.map(({ description, data, valid }) => [
-      description,
-      data,
-      valid,
-    ]);
-
-    const mod = { exports: {} as any };
-
-    Vm.runInContext(result.javaScript, Vm.createContext({ exports: mod.exports, mod }));
-
-    const exportName = result.schemaRootNames.get(uri);
-
-    expect(typeof exportName).toBe('string');
-
-    const codec: Codec<unknown> = mod.exports[`${exportName}Codec`] as Codec<unknown>;
-    const testData = (value: unknown) => {
-      try {
-        codec.assertValid(value);
-        return true;
-      } catch {
-        return false;
-      }
-    };
-
-    expect(codec).toBeTruthy();
-
-    it.concurrent.each(matrix)('%s', async (_name, data, valid) => {
-      const testResult = testData(data);
-
-      expect(testResult).toBe(valid);
-    });
   });
 });
