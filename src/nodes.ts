@@ -338,7 +338,10 @@ export class SchemaNode extends BaseSchemaNode<JSONSchema7, SchemaNodeOptions> {
 
       for (const name in this.options.properties) {
         const typeWriter = this.options.properties[name].provideWriterFunction(ctx);
+        const docs = this.options.properties[name].provideDocs();
+
         properties.push({
+          docs: docs ? [docs] : undefined,
           name,
           hasQuestionToken: !required.has(name),
           type: typeWriter,
