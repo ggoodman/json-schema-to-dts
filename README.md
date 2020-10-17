@@ -7,7 +7,16 @@ Convert JSON Schema definitions into accurate (as possible) TypeScript definitio
 Given the schema
 
 ```json
-"TODO"
+{
+  "type": "object",
+  "properties": {
+    "name": { "type": "string", "description": "The name of an object" },
+    "not_annotated": { "type": "null" },
+    "command": {
+      "oneOf": [{ "const": "a constant!" }, { "enum": ["multiple", { "options": "are allowed" }] }]
+    }
+  }
+}
 ```
 
 And these options:
@@ -23,7 +32,26 @@ const options = {
 We get the following result:
 
 ```ts
-// TODO
+type JSONPrimitive = boolean | null | number | string;
+type JSONValue =
+  | JSONPrimitive
+  | JSONValue[]
+  | {
+      [key: string]: JSONValue;
+    };
+export type Test = {
+  /** The name of an object */
+  name?: string;
+  not_annotated?: null;
+  command?:
+    | 'a constant!'
+    | (
+        | 'multiple'
+        | {
+            options: 'are allowed';
+          }
+      );
+};
 ```
 
 ## API

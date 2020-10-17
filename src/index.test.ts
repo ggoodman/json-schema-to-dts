@@ -6,14 +6,22 @@ describe('Definition generation', () => {
     parser.addSchema('file:///test.json', {
       type: 'object',
       properties: {
-        //@ts-ignore
         name: {
           type: 'string',
           description: 'The name of an object',
         },
-        //@ts-ignore
         not_annotated: {
           type: 'null',
+        },
+        command: {
+          oneOf: [
+            {
+              const: 'a constant!',
+            },
+            {
+              enum: ['multiple', { options: 'are allowed' }],
+            },
+          ],
         },
       },
     });
@@ -29,6 +37,9 @@ describe('Definition generation', () => {
           /** The name of an object */
           name?: string;
           not_annotated?: null;
+          command?: (\\"a constant!\\" | (\\"multiple\\" | {
+              \\"options\\": \\"are allowed\\";
+          }));
       };
       "
     `);
