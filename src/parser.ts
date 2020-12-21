@@ -44,7 +44,10 @@ export class Parser {
 
   addSchema(uri: string, schema: JSONSchema7Definition) {
     const node = this.ctx.enterUri(uri, schema, parseSchemaDefinition);
+    const name = this.generateDeconflictedName(node);
     this.rootNodes.set(uri, node);
+
+    return name;
   }
 
   compile(options: ParserCompileOptions = {}) {
