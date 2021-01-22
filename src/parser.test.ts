@@ -85,3 +85,60 @@ describe.each(matrix)('%s', (_name, cases, uri) => {
     expect(errorDiagnostics).toHaveLength(0);
   });
 });
+
+describe('A Parser instance', () => {
+  it('will use a preferred name', () => {
+    const parser = new Parser();
+    const typeName = parser.addSchema(
+      'file:///foo.json',
+      {
+        title: 'Title of the type',
+      },
+      {
+        preferredName: 'MyType',
+      }
+    );
+
+    expect(typeName).toBe('MyType');
+  });
+
+  it('will use a preferred name but will coerce it to a safe string', () => {
+    const parser = new Parser();
+    const typeName = parser.addSchema(
+      'file:///foo.json',
+      {
+        title: 'Title of the type',
+      },
+      {
+        preferredName: 'My Type',
+      }
+    );
+
+    expect(typeName).toBe('MyType');
+  });
+
+  it('will use a preferred name but will add an ordinal suffix if already present', () => {
+    const parser = new Parser();
+    const typeName1 = parser.addSchema(
+      'file:///foo.json',
+      {
+        title: 'Title of the type',
+      },
+      {
+        preferredName: 'My Type',
+      }
+    );
+    const typeName2 = parser.addSchema(
+      'file:///bar.json',
+      {
+        title: 'Title of the type',
+      },
+      {
+        preferredName: 'My Type',
+      }
+    );
+
+    expect(typeName1).toBe('MyType');
+    expect(typeName2).toBe('MyType0');
+  });
+});

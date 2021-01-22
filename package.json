@@ -11,11 +11,13 @@
     "ts-morph": "^8.1.1"
   },
   "devDependencies": {
+    "@brightcove/kacl": "^0.1.11",
     "@types/jest": "^26.0.14",
     "@types/json-schema": "^7.0.6",
     "@types/node": "^12.12.43",
     "@types/prettier": "^2.0.1",
     "@wessberg/rollup-plugin-ts": "^1.2.24",
+    "gh-release": "^5.0.0",
     "jest": "^26.5.0",
     "jest-junit": "^12.0.0",
     "json-schema-test-suite": "github:json-schema-org/JSON-Schema-Test-Suite#0a0f0cd",
@@ -30,20 +32,24 @@
     "build": "rm -rf dist && rollup -c",
     "generate": "ts-node ./scripts/generateTypes.ts",
     "lint": "prettier --check src/**/*",
-    "preversion": "npm run generate && npm run build",
-    "test": "jest --verbose"
+    "test": "jest --verbose",
+    "posttest": "kacl lint",
+    "prepack": "npm run build",
+    "preversion": "kacl prerelease",
+    "version": "kacl release && git add CHANGELOG.md",
+    "postversion": "git push && gh-release"
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/ggoodman/json-schema-compiler.git"
+    "url": "git+https://github.com/ggoodman/json-schema-to-dts.git"
   },
   "keywords": [],
   "author": "Geoffrey Goodman",
   "license": "MIT",
   "bugs": {
-    "url": "https://github.com/ggoodman/json-schema-compiler/issues"
+    "url": "https://github.com/ggoodman/json-schema-to-dts/issues"
   },
-  "homepage": "https://github.com/ggoodman/json-schema-compiler#readme",
+  "homepage": "https://github.com/ggoodman/json-schema-to-dts#readme",
   "engines": {
     "node": ">=10.16.0"
   },
