@@ -102,7 +102,7 @@ export class Parser {
       return cached;
     }
 
-    let candidate: string = options.preferredName ?? '';
+    let candidate: string = options.preferredName ? toSafeString(options.preferredName) : '';
 
     if (!candidate) {
       if (typeof node.schema !== 'boolean' && node.schema.title) {
