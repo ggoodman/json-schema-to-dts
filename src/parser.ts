@@ -36,15 +36,23 @@ interface ParserCompileTypeOptions {
   isExported?: boolean;
 }
 
+interface AddSchemaOptions {
+  preferredName?: string;
+}
+
+interface GenerateDeconflictedNameOptions {
+  preferredName?: string;
+}
+
 export class Parser {
   private readonly ctx = new ParserContext();
   private readonly uriToTypeName = new Map<string, string>();
   private readonly uriByTypeName = new Map<string, string>();
   private readonly rootNodes = new Map<string, ISchemaNode>();
 
-  addSchema(uri: string, schema: JSONSchema7Definition) {
+  addSchema(uri: string, schema: JSONSchema7Definition, options: AddSchemaOptions = {}) {
     const node = this.ctx.enterUri(uri, schema, parseSchemaDefinition);
-    const name = this.generateDeconflictedName(node);
+    const name = this.generateDeconflictedName(node, { preferredName: options.preferredName });
     this.rootNodes.set(uri, node);
 
     return name;
@@ -84,27 +92,32 @@ export class Parser {
     return diagnostics;
   }
 
-  private generateDeconflictedName(node: ISchemaNode): string {
+  private generateDeconflictedName(
+    node: ISchemaNode,
+    options: GenerateDeconflictedNameOptions = {}
+  ): string {
     const cached = this.uriToTypeName.get(node.uri);
 
     if (cached) {
       return cached;
     }
 
-    let candidate: string = '';
+    let candidate: string = options.preferredName ?? '';
 
-    if (typeof node.schema !== 'boolean' && node.schema.title) {
-      candidate = toSafeString(node.schema.title);
-    } else {
-      const url = new URL(node.uri);
-      const matches = url.hash.match(/^#\/(?:\w+\/)*(\w+)$/);
-
-      if (matches && matches[1]) {
-        candidate = toSafeString(matches[1]);
+    if (!candidate) {
+      if (typeof node.schema !== 'boolean' && node.schema.title) {
+        candidate = toSafeString(node.schema.title);
       } else {
-        candidate = toSafeString(
-          new URL((node.schema as JSONSchema7).$id || node.uri).pathname.replace(/\.[\w\.]*$/, '')
-        );
+        const url = new URL(node.uri);
+        const matches = url.hash.match(/^#\/(?:\w+\/)*(\w+)$/);
+
+        if (matches && matches[1]) {
+          candidate = toSafeString(matches[1]);
+        } else {
+          candidate = toSafeString(
+            new URL((node.schema as JSONSchema7).$id || node.uri).pathname.replace(/\.[\w\.]*$/, '')
+          );
+        }
       }
     }
 
