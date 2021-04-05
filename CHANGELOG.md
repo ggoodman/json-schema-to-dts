@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+
+## [1.4.0] - 2021-04-05
 ### Added
 - The type used for open-ended schemas can be passed via the `anyType` option in the Partser's `generateTypings` method.
   
@@ -17,4 +19,5 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 [#2]: https://github.com/ggoodman/json-schema-to-dts/issues/2
 
-[Unreleased]: https://github.com/ggoodman/json-schema-to-dts/compare/v1.3.0...HEAD
+[Unreleased]: https://github.com/ggoodman/json-schema-to-dts/compare/v1.4.0...HEAD
+[1.4.0]: https://github.com/ggoodman/json-schema-to-dts/compare/v1.3.0...v1.4.0
