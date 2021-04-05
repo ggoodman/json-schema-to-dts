@@ -9,6 +9,7 @@ import {
 import { URL } from 'url';
 import { IParserDiagnostic, ParserDiagnosticKind } from './diagnostics';
 import {
+  AnyType,
   BooleanSchemaNode,
   ISchemaNode,
   ITypingContext,
@@ -20,6 +21,12 @@ import { IReference } from './references';
 import { JSONSchema7, JSONSchema7Definition, JSONSchema7TypeName } from './types';
 
 interface ParserCompileOptions {
+  /**
+   * The type name for schemas that are functionally equivalent to TypeScript's `any`
+   * or `unknown` type.
+   */
+  anyType?: AnyType;
+
   /**
    * Declaration options for the top-level schemas in each added schema file.
    */
@@ -167,6 +174,7 @@ export class Parser {
   private generateTypings(options: ParserCompileOptions) {
     const liftedTypes = new Map<string, ISchemaNode>();
     const ctx: ITypingContext = {
+      anyType: options.anyType || 'unknown',
       getNameForReference: (ref: IReference) => {
         const node = this.getNodeByReference(ref);
         const name = this.generateDeconflictedName(node);
