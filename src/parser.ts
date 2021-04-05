@@ -174,7 +174,7 @@ export class Parser {
   private generateTypings(options: ParserCompileOptions) {
     const liftedTypes = new Map<string, ISchemaNode>();
     const ctx: ITypingContext = {
-      anyType: options.anyType || 'unknown',
+      anyType: options.anyType || 'JSONValue',
       getNameForReference: (ref: IReference) => {
         const node = this.getNodeByReference(ref);
         const name = this.generateDeconflictedName(node);
@@ -210,10 +210,12 @@ export class Parser {
     });
     const sourceFile = project.createSourceFile(
       'schema.ts',
-      `
+      ctx.anyType === 'JSONValue'
+        ? `
 type JSONPrimitive = boolean | null | number | string;
 type JSONValue = JSONPrimitive | JSONValue[] | { [key: string]: JSONValue };
       `.trim() + '\n'
+        : ''
     );
     const printed = new Set<ISchemaNode>();
 
