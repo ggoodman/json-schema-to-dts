@@ -44,4 +44,62 @@ describe('Definition generation', () => {
       "
     `);
   });
+
+  describe('will produce schemas that reflect the selected anyType', () => {
+    it('when anyType is unspecified', () => {
+      const parser = new Parser();
+      parser.addSchema('file:///test.json', true);
+
+      const result = parser.compile();
+
+      expect(result.text).toMatchInlineSnapshot(`
+        "type JSONPrimitive = boolean | null | number | string;
+        type JSONValue = JSONPrimitive | JSONValue[] | {
+            [key: string]: JSONValue;
+        };
+        export type Test = JSONValue;
+        "
+      `);
+    });
+
+    it('when anyType is "any"', () => {
+      const parser = new Parser();
+      parser.addSchema('file:///test.json', true);
+
+      const result = parser.compile({ anyType: 'any' });
+
+      expect(result.text).toMatchInlineSnapshot(`
+        "export type Test = any;
+        "
+      `);
+    });
+
+    it('when anyType is "JSONValue"', () => {
+      const parser = new Parser();
+      parser.addSchema('file:///test.json', true);
+
+      const result = parser.compile({ anyType: 'JSONValue' });
+
+      expect(result.text).toMatchInlineSnapshot(`
+        "type JSONPrimitive = boolean | null | number | string;
+        type JSONValue = JSONPrimitive | JSONValue[] | {
+            [key: string]: JSONValue;
+        };
+        export type Test = JSONValue;
+        "
+      `);
+    });
+
+    it('when anyType is "unknown"', () => {
+      const parser = new Parser();
+      parser.addSchema('file:///test.json', true);
+
+      const result = parser.compile({ anyType: 'unknown' });
+
+      expect(result.text).toMatchInlineSnapshot(`
+        "export type Test = unknown;
+        "
+      `);
+    });
+  });
 });

@@ -11,7 +11,10 @@ import {
 import { IReference } from './references';
 import { JSONSchema7, JSONSchema7Definition, JSONSchema7Type, JSONSchema7TypeName } from './types';
 
+export type AnyType = 'any' | 'JSONValue' | 'unknown';
+
 export interface ITypingContext {
+  anyType: AnyType;
   getNameForReference(ref: IReference): string;
 }
 
@@ -152,8 +155,8 @@ abstract class BaseSchemaNode<TSchema extends JSONSchema7Definition, TOptions = 
 export class BooleanSchemaNode extends BaseSchemaNode<boolean> {
   readonly kind = SchemaNodeKind.Boolean;
 
-  provideWriterFunction(_ctx: ITypingContext): WriterFunction {
-    return createLiteralWriterFunction(this.schema ? 'JSONValue' : 'never');
+  provideWriterFunction(ctx: ITypingContext): WriterFunction {
+    return createLiteralWriterFunction(this.schema ? ctx.anyType : 'never');
   }
 }
 
@@ -276,7 +279,7 @@ export class SchemaNode extends BaseSchemaNode<JSONSchema7, SchemaNodeOptions> {
     }
 
     if (!typeWriters.length) {
-      typeWriters.push(createLiteralWriterFunction('JSONValue'));
+      typeWriters.push(createLiteralWriterFunction(ctx.anyType));
     }
 
     return createIntersectionTypeWriterFunction(typeWriters);
@@ -382,7 +385,7 @@ export class SchemaNode extends BaseSchemaNode<JSONSchema7, SchemaNodeOptions> {
     }
 
     if (!writers.length) {
-      writers.push(createLiteralWriterFunction(`{ [property: string]: JSONValue }`));
+      writers.push(createLiteralWriterFunction(`{ [property: string]: ${ctx.anyType} }`));
     }
 
     return createIntersectionTypeWriterFunction(writers);
