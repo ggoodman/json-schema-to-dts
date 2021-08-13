@@ -5,6 +5,7 @@ import {
   Project,
   QuoteKind,
   ScriptTarget,
+  SourceFile
 } from 'ts-morph';
 import { URL } from 'url';
 import { IParserDiagnostic, ParserDiagnosticKind } from './diagnostics';
@@ -14,7 +15,7 @@ import {
   ISchemaNode,
   ITypingContext,
   SchemaNode,
-  SchemaNodeOptions,
+  SchemaNodeOptions
 } from './nodes';
 import { IParserContext, ParserContext } from './parserContext';
 import { IReference } from './references';
@@ -36,6 +37,11 @@ interface ParserCompileOptions {
    * Declaration options for the sub-schemas depended-upon by the top-level schemas.
    */
   lifted?: ParserCompileTypeOptions;
+
+  /**
+   * An existing ts-morph file which, if specified, will be modified rather than creating a new file.
+   */
+  sourceFile?: SourceFile;
 }
 
 interface ParserCompileTypeOptions {
@@ -185,38 +191,43 @@ export class Parser {
       },
     };
 
-    const project = new Project({
-      compilerOptions: {
-        alwaysStrict: true,
-        declaration: true,
-        downlevelIteration: true,
-        esModuleInterop: true,
-        isolatedModules: true,
-        lib: ['esnext'],
-        module: ModuleKind.CommonJS,
-        removeComments: true,
-        strict: true,
-        suppressExcessPropertyErrors: true,
-        target: ScriptTarget.ES2018,
-      },
-      useInMemoryFileSystem: true,
-      manipulationSettings: {
-        indentationText: IndentationText.TwoSpaces,
-        useTrailingCommas: true,
-        newLineKind: NewLineKind.LineFeed,
-        quoteKind: QuoteKind.Single,
-        insertSpaceAfterOpeningAndBeforeClosingNonemptyBraces: true,
-      },
-    });
-    const sourceFile = project.createSourceFile(
-      'schema.ts',
-      ctx.anyType === 'JSONValue'
-        ? `
-type JSONPrimitive = boolean | null | number | string;
-type JSONValue = JSONPrimitive | JSONValue[] | { [key: string]: JSONValue };
-      `.trim() + '\n'
-        : ''
-    );
+    let sourceFile
+    if (options.sourceFile) {
+      sourceFile = options.sourceFile
+    } else {
+      const project = new Project({
+        compilerOptions: {
+          alwaysStrict: true,
+          declaration: true,
+          downlevelIteration: true,
+          esModuleInterop: true,
+          isolatedModules: true,
+          lib: ['esnext'],
+          module: ModuleKind.CommonJS,
+          removeComments: true,
+          strict: true,
+          suppressExcessPropertyErrors: true,
+          target: ScriptTarget.ES2018,
+        },
+        useInMemoryFileSystem: true,
+        manipulationSettings: {
+          indentationText: IndentationText.TwoSpaces,
+          useTrailingCommas: true,
+          newLineKind: NewLineKind.LineFeed,
+          quoteKind: QuoteKind.Single,
+          insertSpaceAfterOpeningAndBeforeClosingNonemptyBraces: true,
+        },
+      });
+      sourceFile = project.createSourceFile(
+        'schema.ts',
+        ctx.anyType === 'JSONValue'
+          ? `
+  type JSONPrimitive = boolean | null | number | string;
+  type JSONValue = JSONPrimitive | JSONValue[] | { [key: string]: JSONValue };
+        `.trim() + '\n'
+          : ''
+      );
+    }
     const printed = new Set<ISchemaNode>();
 
     for (const node of this.rootNodes.values()) {

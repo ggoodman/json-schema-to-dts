@@ -1,5 +1,5 @@
 {
-  "name": "json-schema-to-dts",
+  "name": "@atek-cloud/json-schema-to-dts",
   "version": "1.4.1",
   "description": "Create TypeScript types from json-schema v7",
   "main": "dist/index.js",

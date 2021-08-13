@@ -1,6 +1,8 @@
 # json-schema-to-dts
 
-Convert JSON Schema definitions into accurate (as possible) TypeScript definitions, specifying how the main schema types and lifted sub-schemas should be declared / exported.
+Convert JSON Schema definitions into accurate (as possible) TypeScript
+definitions, specifying how the main schema types and lifted sub-schemas should
+be declared / exported.
 
 ## Example
 
@@ -13,7 +15,10 @@ Given the schema
     "name": { "type": "string", "description": "The name of an object" },
     "not_annotated": { "type": "null" },
     "command": {
-      "oneOf": [{ "const": "a constant!" }, { "enum": ["multiple", { "options": "are allowed" }] }]
+      "oneOf": [
+        { "const": "a constant!" },
+        { "enum": ["multiple", { "options": "are allowed" }] }
+      ]
     }
   }
 }
@@ -37,20 +42,20 @@ type JSONValue =
   | JSONPrimitive
   | JSONValue[]
   | {
-      [key: string]: JSONValue;
-    };
+    [key: string]: JSONValue;
+  };
 export type Test = {
   /** The name of an object */
   name?: string;
   not_annotated?: null;
   command?:
-    | 'a constant!'
+    | "a constant!"
     | (
-        | 'multiple'
-        | {
-            options: 'are allowed';
-          }
-      );
+      | "multiple"
+      | {
+        options: "are allowed";
+      }
+    );
 };
 ```
 
@@ -64,7 +69,8 @@ Produce a new `Parser` instance.
 
 Add a schema to the parser where:
 
-- `uri` - is a string representing the schema's uri (ie: `file:///path/to/schema.json`)
+- `uri` - is a string representing the schema's uri (ie:
+  `file:///path/to/schema.json`)
 - `schema` - is the json object representation of the schema
 
 #### `.compile(options)`
@@ -77,6 +83,7 @@ Compile all added schemas where:
 - `lifted` - options for sub-schemas that have been lifted during compilation
   - `hasDeclareKeyword` - _(optional)_ mark the type declaration as `declare`
   - `isExported` - _(optional)_ `export` the type declaration
+- `sourceFile` - _(optional)_ existing source file to add the types to
 
 Returns an object `{ diagnostics, text }` where:
 
