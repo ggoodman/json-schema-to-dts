@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+
+## [1.5.0] - 2022-08-31
 ### Added
 - Added support for opting out of emitting the `@see` directives in schema doc comments through the `omitIdComments` option. By default, these tags _will_ be emitted to preserve backwards-compatibility. To omit these comments, `omitIdComments: true` can be specified as an option.
 - Introduce the `shouldOmitTypeEmit` option to the `compile` method of `Parser` instances. This option allows consumers to conditionally skip the emit of some sub-schemas' types. This function receives references to the child node being emitted and the parent node.
@@ -26,6 +28,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 [#2]: https://github.com/ggoodman/json-schema-to-dts/issues/2
 
-[Unreleased]: https://github.com/ggoodman/json-schema-to-dts/compare/v1.4.1...HEAD
+[Unreleased]: https://github.com/ggoodman/json-schema-to-dts/compare/v1.5.0...HEAD
+[1.5.0]: https://github.com/ggoodman/json-schema-to-dts/compare/v1.4.1...v1.5.0
 [1.4.1]: https://github.com/ggoodman/json-schema-to-dts/compare/v1.4.0...v1.4.1
 [1.4.0]: https://github.com/ggoodman/json-schema-to-dts/compare/v1.3.0...v1.4.0
