@@ -18,6 +18,7 @@ import {
 } from './nodes';
 import { IParserContext, ParserContext } from './parserContext';
 import { IReference } from './references';
+import { CoreSchemaMetaSchema } from './schema';
 import { JSONSchema7, JSONSchema7Definition, JSONSchema7TypeName } from './types';
 
 interface ParserCompileOptions {
@@ -42,6 +43,11 @@ interface ParserCompileOptions {
    * Declaration options for the sub-schemas depended-upon by the top-level schemas.
    */
   lifted?: ParserCompileTypeOptions;
+
+  shouldOmitTypeEmit?(
+    node: ISchemaNode<CoreSchemaMetaSchema>,
+    parentNode: ISchemaNode<CoreSchemaMetaSchema>
+  ): boolean;
 }
 
 interface ParserCompileTypeOptions {
@@ -56,6 +62,8 @@ interface AddSchemaOptions {
 interface GenerateDeconflictedNameOptions {
   preferredName?: string;
 }
+
+const alwaysEmit = () => true;
 
 export class Parser {
   private readonly ctx = new ParserContext();
@@ -179,6 +187,7 @@ export class Parser {
 
   private generateTypings(options: ParserCompileOptions) {
     const liftedTypes = new Map<string, ISchemaNode>();
+    const shouldOmitTypeEmit = options.shouldOmitTypeEmit;
     const ctx: ITypingContext = {
       anyType: options.anyType || 'JSONValue',
       getNameForReference: (ref: IReference) => {
@@ -189,6 +198,9 @@ export class Parser {
 
         return name;
       },
+      shouldEmitTypes: shouldOmitTypeEmit
+        ? (node, parentNode) => !shouldOmitTypeEmit(node, parentNode)
+        : alwaysEmit,
     };
 
     const project = new Project({

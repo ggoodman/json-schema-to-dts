@@ -45,6 +45,69 @@ describe('Definition generation', () => {
     `);
   });
 
+  it('will optionally omit sub schemas', () => {
+    const parser = new Parser();
+    parser.addSchema('file:///test.json', {
+      type: 'object',
+      properties: {
+        name: {
+          type: 'string',
+          description: 'The name of an object',
+        },
+        not_annotated: {
+          type: 'null',
+          'x-omit-types': true,
+        },
+        command: {
+          oneOf: [
+            {
+              const: 'a constant!',
+            },
+            {
+              enum: ['multiple', { options: 'are allowed' }],
+              'x-omit-types': true,
+            },
+          ],
+        },
+      },
+    });
+
+    expect(parser.compile().text).toMatchInlineSnapshot(`
+      "type JSONPrimitive = boolean | null | number | string;
+      type JSONValue = JSONPrimitive | JSONValue[] | {
+          [key: string]: JSONValue;
+      };
+      export type Test = {
+          /** The name of an object */
+          name?: string;
+          not_annotated?: null;
+          command?: (\\"a constant!\\" | (\\"multiple\\" | {
+              \\"options\\": \\"are allowed\\";
+          }));
+      };
+      "
+    `);
+
+    expect(
+      parser.compile({
+        shouldOmitTypeEmit(node) {
+          return typeof node.schema === 'object' && !!node.schema['x-omit-types'];
+        },
+      }).text
+    ).toMatchInlineSnapshot(`
+      "type JSONPrimitive = boolean | null | number | string;
+      type JSONValue = JSONPrimitive | JSONValue[] | {
+          [key: string]: JSONValue;
+      };
+      export type Test = {
+          /** The name of an object */
+          name?: string;
+          command?: \\"a constant!\\";
+      };
+      "
+    `);
+  });
+
   describe('will produce schemas that reflect the selected anyType', () => {
     it('when anyType is unspecified', () => {
       const parser = new Parser();

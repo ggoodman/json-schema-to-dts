@@ -9,6 +9,7 @@ import {
   Writers,
 } from 'ts-morph';
 import { IReference } from './references';
+import { CoreSchemaMetaSchema } from './schema';
 import { JSONSchema7, JSONSchema7Definition, JSONSchema7Type, JSONSchema7TypeName } from './types';
 
 export type AnyType = 'any' | 'JSONValue' | 'unknown';
@@ -19,6 +20,10 @@ export interface IDocEmitOptions {
 export interface ITypingContext {
   anyType: AnyType;
   getNameForReference(ref: IReference): string;
+  shouldEmitTypes(
+    schema: ISchemaNode<CoreSchemaMetaSchema>,
+    parentNode: ISchemaNode<JSONSchema7>
+  ): boolean;
 }
 
 export interface ISchemaNode<T extends JSONSchema7Definition = JSONSchema7Definition> {
@@ -202,7 +207,9 @@ export class SchemaNode extends BaseSchemaNode<JSONSchema7, SchemaNodeOptions> {
     }
 
     if (this.options.anyOf) {
-      const writerFunctions = this.options.anyOf.map((node) => node.provideWriterFunction(ctx));
+      const writerFunctions = this.options.anyOf
+        .filter((node) => ctx.shouldEmitTypes(node, this))
+        .map((node) => node.provideWriterFunction(ctx));
 
       if (writerFunctions.length) {
         typeWriters.push(createUnionTypeWriterFunction(writerFunctions));
@@ -210,7 +217,9 @@ export class SchemaNode extends BaseSchemaNode<JSONSchema7, SchemaNodeOptions> {
     }
 
     if (this.options.allOf) {
-      const writerFunctions = this.options.allOf.map((node) => node.provideWriterFunction(ctx));
+      const writerFunctions = this.options.allOf
+        .filter((node) => ctx.shouldEmitTypes(node, this))
+        .map((node) => node.provideWriterFunction(ctx));
 
       if (writerFunctions.length) {
         typeWriters.push(createIntersectionTypeWriterFunction(writerFunctions));
@@ -218,7 +227,9 @@ export class SchemaNode extends BaseSchemaNode<JSONSchema7, SchemaNodeOptions> {
     }
 
     if (this.options.oneOf) {
-      const writerFunctions = this.options.oneOf.map((node) => node.provideWriterFunction(ctx));
+      const writerFunctions = this.options.oneOf
+        .filter((node) => ctx.shouldEmitTypes(node, this))
+        .map((node) => node.provideWriterFunction(ctx));
 
       if (writerFunctions.length) {
         typeWriters.push(createUnionTypeWriterFunction(writerFunctions));
@@ -302,7 +313,7 @@ export class SchemaNode extends BaseSchemaNode<JSONSchema7, SchemaNodeOptions> {
         typeWriter(writer);
       }
 
-      if (this.options.additionalItems) {
+      if (this.options.additionalItems && ctx.shouldEmitTypes(this.options.additionalItems, this)) {
         const typeWriter = this.options.additionalItems.provideWriterFunction(ctx);
 
         writer.write('...'), typeWriter(writer);
@@ -322,7 +333,7 @@ export class SchemaNode extends BaseSchemaNode<JSONSchema7, SchemaNodeOptions> {
 
     let typeWriter = createLiteralWriterFunction('unknown[]');
 
-    if (items) {
+    if (items && ctx.shouldEmitTypes(items, this)) {
       const writerFunction = items.provideWriterFunction(ctx);
 
       typeWriter = (writer) => {
@@ -343,8 +354,14 @@ export class SchemaNode extends BaseSchemaNode<JSONSchema7, SchemaNodeOptions> {
       const properties: OptionalKind<PropertySignatureStructure>[] = [];
 
       for (const name in this.options.properties) {
-        const typeWriter = this.options.properties[name].provideWriterFunction(ctx);
-        const docs = this.options.properties[name].provideDocs();
+        const node = this.options.properties[name];
+
+        if (!ctx.shouldEmitTypes(node, this)) {
+          continue;
+        }
+
+        const typeWriter = node.provideWriterFunction(ctx);
+        const docs = node.provideDocs();
 
         properties.push({
           docs: docs ? [docs] : undefined,
@@ -361,7 +378,10 @@ export class SchemaNode extends BaseSchemaNode<JSONSchema7, SchemaNodeOptions> {
 
     const indexSignatures: OptionalKind<IndexSignatureDeclarationStructure>[] = [];
 
-    if (this.options.additionalProperties) {
+    if (
+      this.options.additionalProperties &&
+      ctx.shouldEmitTypes(this.options.additionalProperties, this)
+    ) {
       const typeWriter = this.options.additionalProperties.provideWriterFunction(ctx);
 
       indexSignatures.push({
@@ -373,7 +393,13 @@ export class SchemaNode extends BaseSchemaNode<JSONSchema7, SchemaNodeOptions> {
 
     if (this.options.patternProperties) {
       for (const name in this.options.patternProperties) {
-        const typeWriter = this.options.patternProperties[name].provideWriterFunction(ctx);
+        const node = this.options.patternProperties[name];
+
+        if (!ctx.shouldEmitTypes(node, this)) {
+          continue;
+        }
+
+        const typeWriter = node.provideWriterFunction(ctx);
 
         indexSignatures.push({
           keyName: 'patternProperties',

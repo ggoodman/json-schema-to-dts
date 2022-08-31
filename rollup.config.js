@@ -1,9 +1,8 @@
-import RollupPluginTypescript from '@wessberg/rollup-plugin-ts';
 import { builtinModules } from 'module';
 import * as Rollup from 'rollup';
+import RollupPluginTypescript from 'rollup-plugin-ts';
 import * as Typescript from 'typescript';
 import { dependencies } from './package.json';
-
 
 const nodeModuleRx = new RegExp(
   `^(?:${[...Object.keys(dependencies), ...builtinModules].join('|')})(?:\/.*)?$`
