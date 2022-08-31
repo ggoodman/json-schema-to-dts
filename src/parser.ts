@@ -28,6 +28,12 @@ interface ParserCompileOptions {
   anyType?: AnyType;
 
   /**
+   * Skip emitting a `@see` directive when generating doc comments on schemas having
+   * an `$id` property.
+   */
+  omitIdComments?: boolean;
+
+  /**
    * Declaration options for the top-level schemas in each added schema file.
    */
   topLevel?: ParserCompileTypeOptions;

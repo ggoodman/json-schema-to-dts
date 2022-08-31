@@ -13,6 +13,9 @@ import { JSONSchema7, JSONSchema7Definition, JSONSchema7Type, JSONSchema7TypeNam
 
 export type AnyType = 'any' | 'JSONValue' | 'unknown';
 
+export interface IDocEmitOptions {
+  emitSeeDirective?: boolean;
+}
 export interface ITypingContext {
   anyType: AnyType;
   getNameForReference(ref: IReference): string;
@@ -25,7 +28,7 @@ export interface ISchemaNode<T extends JSONSchema7Definition = JSONSchema7Defini
   readonly uri: string;
 
   provideWriterFunction(ctx: ITypingContext): WriterFunction;
-  provideDocs(): OptionalKind<JSDocStructure> | undefined;
+  provideDocs(options?: IDocEmitOptions): OptionalKind<JSDocStructure> | undefined;
 }
 
 export enum SchemaNodeKind {
@@ -163,7 +166,7 @@ export class BooleanSchemaNode extends BaseSchemaNode<boolean> {
 export class SchemaNode extends BaseSchemaNode<JSONSchema7, SchemaNodeOptions> {
   readonly kind = SchemaNodeKind.Schema;
 
-  provideDocs() {
+  provideDocs(options?: IDocEmitOptions) {
     const lines: string[] = [];
     const tags: OptionalKind<JSDocTagStructure>[] = [];
 
@@ -175,7 +178,7 @@ export class SchemaNode extends BaseSchemaNode<JSONSchema7, SchemaNodeOptions> {
       lines.push(this.schema.description);
     }
 
-    if (this.schema.$id) {
+    if (options?.emitSeeDirective && this.schema.$id) {
       tags.push({ tagName: 'see', text: this.schema.$id });
     }
 
