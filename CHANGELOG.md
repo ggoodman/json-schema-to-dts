@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+### Added
+- Added support for opting out of emitting the `@see` directives in schema doc comments through the `omitIdComments` option. By default, these tags _will_ be emitted to preserve backwards-compatibility. To omit these comments, `omitIdComments: true` can be specified as an option.
 
 ## [1.4.1] - 2021-04-05
 ### Fixed
