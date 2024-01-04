@@ -1,3 +1,4 @@
+import isValidVariable from 'is-valid-variable';
 import {
   CodeBlockWriter,
   IndexSignatureDeclarationStructure,
@@ -143,7 +144,8 @@ export interface SchemaNodeOptions {
 }
 
 abstract class BaseSchemaNode<TSchema extends JSONSchema7Definition, TOptions = undefined>
-  implements ISchemaNode<TSchema> {
+  implements ISchemaNode<TSchema>
+{
   abstract readonly kind: SchemaNodeKind;
 
   constructor(
@@ -362,10 +364,11 @@ export class SchemaNode extends BaseSchemaNode<JSONSchema7, SchemaNodeOptions> {
 
         const typeWriter = node.provideWriterFunction(ctx);
         const docs = node.provideDocs();
+        const safeName = propertyNameRequiresQuoting(name) ? `[${JSON.stringify(name)}]` : name;
 
         properties.push({
           docs: docs ? [docs] : undefined,
-          name,
+          name: safeName,
           hasQuestionToken: !required.has(name),
           type: typeWriter,
         });
@@ -459,4 +462,8 @@ function createUnionTypeWriterFunction(options: WriterFunction[]): WriterFunctio
     writerFn(writer);
     writer.write(')');
   };
+}
+
+function propertyNameRequiresQuoting(name: string): boolean {
+  return !isValidVariable(name);
 }

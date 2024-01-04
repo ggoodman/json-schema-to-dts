@@ -11,6 +11,11 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ### Fixed
 - Change `hasAnyProperty` type argument to extend `{}` so that TypeScript can understand that the iteration protocol is supported over properties.
+- Detect `"properties"` keys that are invalid JavaScript identifier names and escape them in the generated code.
+  
+  For example, the property `"app.prop"` will no longer produce invalid types and will instead be encoded as `["app.prop"]`.
+
+  Fixes #7.
 
 ## [1.5.0] - 2022-08-31
 ### Added

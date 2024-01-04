@@ -108,6 +108,39 @@ describe('Definition generation', () => {
     `);
   });
 
+  it('will correctly quote properties with special characters', () => {
+    // See: https://github.com/ggoodman/json-schema-to-dts/issues/7
+    const parser = new Parser();
+    parser.addSchema('urn:test', {
+      $id: 'urn:test',
+      type: 'object',
+      properties: {
+        name: {
+          type: 'string',
+          description: 'The name of an object',
+        },
+        'app.prop': {
+          type: 'null',
+        },
+      },
+    });
+
+    const result = parser.compile();
+
+    expect(result.text).toMatchInlineSnapshot(`
+      "type JSONPrimitive = boolean | null | number | string;
+      type JSONValue = JSONPrimitive | JSONValue[] | {
+          [key: string]: JSONValue;
+      };
+      export type Test = {
+          /** The name of an object */
+          name?: string;
+          [\\"app.prop\\"]?: null;
+      };
+      "
+    `);
+  });
+
   describe('will produce schemas that reflect the selected anyType', () => {
     it('when anyType is unspecified', () => {
       const parser = new Parser();
