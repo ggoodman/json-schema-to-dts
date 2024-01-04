@@ -276,7 +276,7 @@ type JSONValue = JSONPrimitive | JSONValue[] | { [key: string]: JSONValue };
   }
 }
 
-function hasAnyProperty<T, K extends keyof T>(value: T, ...keys: K[]): boolean {
+function hasAnyProperty<T extends {}, K extends keyof T>(value: T, ...keys: K[]): boolean {
   for (const key of keys) {
     if (key in value) return true;
   }
