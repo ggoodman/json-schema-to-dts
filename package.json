@@ -8,6 +8,7 @@
     "dist"
   ],
   "dependencies": {
+    "is-valid-variable": "^1.0.1",
     "ts-morph": "^8.1.1"
   },
   "devDependencies": {

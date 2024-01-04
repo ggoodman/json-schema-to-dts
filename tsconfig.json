@@ -9,9 +9,7 @@
     "esModuleInterop": true,
     "importHelpers": true,
     "incremental": true,
-    "lib": [
-      "esnext"
-    ],
+    "lib": ["esnext"],
     "module": "CommonJS",
     "moduleResolution": "Node",
     "noErrorTruncation": true,
@@ -22,9 +20,5 @@
     "strict": true,
     "target": "ES2018"
   },
-  "include": [
-    "src",
-    "types",
-    "old"
-  ]
+  "include": ["src", "types", "old"]
 }
