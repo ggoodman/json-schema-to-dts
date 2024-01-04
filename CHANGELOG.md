@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+
+## [2.0.0] - 2024-01-04
 ### Changed
 - [SEMVER MAJOR] Deprecate support for node versions earlier than Node 16. Supported versions are now 16, 18 and 20.
 
@@ -14,8 +16,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 - Detect `"properties"` keys that are invalid JavaScript identifier names and escape them in the generated code.
   
   For example, the property `"app.prop"` will no longer produce invalid types and will instead be encoded as `["app.prop"]`.
-
-  Fixes #7.
+  
+  Fixes [#7].
 
 ## [1.5.0] - 2022-08-31
 ### Added
@@ -37,8 +39,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 - Add support for passing a `preferredName` for the generated type when calling `.addSchema` in a new `options` argument. If the preferred name is already taken, the returned type name will be `<preferredName><ordinalCounterValue>`. [#2]
 
 [#2]: https://github.com/ggoodman/json-schema-to-dts/issues/2
+[#7]: https://github.com/ggoodman/json-schema-to-dts/issues/7
 
-[Unreleased]: https://github.com/ggoodman/json-schema-to-dts/compare/v1.5.0...HEAD
+[Unreleased]: https://github.com/ggoodman/json-schema-to-dts/compare/v2.0.0...HEAD
+[2.0.0]: https://github.com/ggoodman/json-schema-to-dts/compare/v1.5.0...v2.0.0
 [1.5.0]: https://github.com/ggoodman/json-schema-to-dts/compare/v1.4.1...v1.5.0
 [1.4.1]: https://github.com/ggoodman/json-schema-to-dts/compare/v1.4.0...v1.4.1
 [1.4.0]: https://github.com/ggoodman/json-schema-to-dts/compare/v1.3.0...v1.4.0
