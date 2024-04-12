@@ -29,20 +29,20 @@ describe('Definition generation', () => {
     const result = parser.compile();
 
     expect(result.text).toMatchInlineSnapshot(`
-      "type JSONPrimitive = boolean | null | number | string;
-      type JSONValue = JSONPrimitive | JSONValue[] | {
-          [key: string]: JSONValue;
-      };
-      export type Test = {
-          /** The name of an object */
-          name?: string;
-          not_annotated?: null;
-          command?: (\\"a constant!\\" | (\\"multiple\\" | {
-              \\"options\\": \\"are allowed\\";
-          }));
-      };
-      "
-    `);
+"type JSONPrimitive = boolean | null | number | string;
+type JSONValue = JSONPrimitive | JSONValue[] | {
+    [key: string]: JSONValue;
+};
+export type Test = {
+    /** The name of an object */
+    name?: string;
+    not_annotated?: null;
+    command?: ("a constant!" | ("multiple" | {
+        "options": "are allowed";
+    }));
+};
+"
+`);
   });
 
   it('will optionally omit sub schemas', () => {
@@ -73,39 +73,39 @@ describe('Definition generation', () => {
     });
 
     expect(parser.compile().text).toMatchInlineSnapshot(`
-      "type JSONPrimitive = boolean | null | number | string;
-      type JSONValue = JSONPrimitive | JSONValue[] | {
-          [key: string]: JSONValue;
-      };
-      export type Test = {
-          /** The name of an object */
-          name?: string;
-          not_annotated?: null;
-          command?: (\\"a constant!\\" | (\\"multiple\\" | {
-              \\"options\\": \\"are allowed\\";
-          }));
-      };
-      "
-    `);
+"type JSONPrimitive = boolean | null | number | string;
+type JSONValue = JSONPrimitive | JSONValue[] | {
+    [key: string]: JSONValue;
+};
+export type Test = {
+    /** The name of an object */
+    name?: string;
+    not_annotated?: null;
+    command?: ("a constant!" | ("multiple" | {
+        "options": "are allowed";
+    }));
+};
+"
+`);
 
     expect(
-      parser.compile({
-        shouldOmitTypeEmit(node) {
-          return typeof node.schema === 'object' && !!node.schema['x-omit-types'];
-        },
-      }).text
-    ).toMatchInlineSnapshot(`
-      "type JSONPrimitive = boolean | null | number | string;
-      type JSONValue = JSONPrimitive | JSONValue[] | {
-          [key: string]: JSONValue;
-      };
-      export type Test = {
-          /** The name of an object */
-          name?: string;
-          command?: \\"a constant!\\";
-      };
-      "
-    `);
+  parser.compile({
+    shouldOmitTypeEmit(node) {
+      return typeof node.schema === 'object' && !!node.schema['x-omit-types'];
+    }
+  }).text
+).toMatchInlineSnapshot(`
+"type JSONPrimitive = boolean | null | number | string;
+type JSONValue = JSONPrimitive | JSONValue[] | {
+    [key: string]: JSONValue;
+};
+export type Test = {
+    /** The name of an object */
+    name?: string;
+    command?: "a constant!";
+};
+"
+`);
   });
 
   it('will correctly quote properties with special characters', () => {
@@ -128,17 +128,17 @@ describe('Definition generation', () => {
     const result = parser.compile();
 
     expect(result.text).toMatchInlineSnapshot(`
-      "type JSONPrimitive = boolean | null | number | string;
-      type JSONValue = JSONPrimitive | JSONValue[] | {
-          [key: string]: JSONValue;
-      };
-      export type Test = {
-          /** The name of an object */
-          name?: string;
-          [\\"app.prop\\"]?: null;
-      };
-      "
-    `);
+"type JSONPrimitive = boolean | null | number | string;
+type JSONValue = JSONPrimitive | JSONValue[] | {
+    [key: string]: JSONValue;
+};
+export type Test = {
+    /** The name of an object */
+    name?: string;
+    ["app.prop"]?: null;
+};
+"
+`);
   });
 
   describe('will produce schemas that reflect the selected anyType', () => {

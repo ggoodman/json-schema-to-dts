@@ -3,9 +3,12 @@ import { IParserDiagnostic, ParserDiagnosticKind } from './diagnostics';
 import { ISchemaNode } from './nodes';
 import { IReference } from './references';
 import { CoreSchemaMetaSchema } from './schema';
+import type { JSONSchema7Definition } from './types';
 import { resolveRelativeJSONPath, resolveRelativeUri } from './uris';
 
 export interface IParserContext {
+  defaultUnknownPropertiesSchema: JSONSchema7Definition;
+  
   readonly diagnostics: IParserDiagnostic[];
   readonly baseUri: string;
   readonly uri: string;
@@ -23,14 +26,29 @@ export interface IParserContext {
   enterSchemaNode(schema: CoreSchemaMetaSchema, fn: () => ISchemaNode): ISchemaNode;
 }
 
+export interface ParserContextOptions {
+  /**
+   * Specify the default schema to be used for unknown properties.
+   * 
+   * For example, you could pass the schema `true` which will allow any valid
+   * JSON value to be used as an unknown property.
+   */
+  defaultUnknownPropertiesSchema: JSONSchema7Definition;
+}
+
 export class ParserContext implements IParserContext {
   baseUri: string = '';
   uri: string = '';
-
+  
+  readonly defaultUnknownPropertiesSchema: JSONSchema7Definition = false;
   readonly diagnostics: IParserDiagnostic[] = [];
   readonly schemasByUri = new Map<string, CoreSchemaMetaSchema>();
   readonly nodesByUri = new Map<string, ISchemaNode>();
   readonly references = new Set<IReference>();
+
+  constructor(options: ParserContextOptions) {
+    this.defaultUnknownPropertiesSchema = options.defaultUnknownPropertiesSchema;
+  }
 
   addDiagnostic(info: Pick<IParserDiagnostic, 'code' | 'message'>) {
     this.diagnostics.push({
