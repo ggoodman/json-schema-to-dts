@@ -65,11 +65,28 @@ interface GenerateDeconflictedNameOptions {
 
 const alwaysEmit = () => true;
 
+export interface ParserOptions {
+  /**
+   * Specify the default schema to be used for unknown properties.
+   * 
+   * For example, you could pass the schema `true` which will allow any valid
+   * JSON value to be used as an unknown property.
+   */
+  defaultUnknownPropertiesSchema?: JSONSchema7Definition;
+}
+
+
 export class Parser {
-  private readonly ctx = new ParserContext();
+  private readonly ctx: ParserContext;
   private readonly uriToTypeName = new Map<string, string>();
   private readonly uriByTypeName = new Map<string, string>();
   private readonly rootNodes = new Map<string, ISchemaNode>();
+  
+  constructor(options: ParserOptions = {}) {
+    this.ctx = new ParserContext({
+      defaultUnknownPropertiesSchema: options.defaultUnknownPropertiesSchema ?? false
+    })
+  }
 
   addSchema(uri: string, schema: JSONSchema7Definition, options: AddSchemaOptions = {}) {
     const node = this.ctx.enterUri(uri, schema, parseSchemaDefinition);
@@ -473,7 +490,7 @@ function visitAsObject(ctx: IParserContext, schema: JSONSchema7, o: SchemaNodeOp
     }
   }
 
-  const additionalProperties = schema.additionalProperties;
+  const additionalProperties = schema.additionalProperties ?? ctx.defaultUnknownPropertiesSchema;
   if (typeof additionalProperties !== 'undefined' && additionalProperties !== false) {
     o.additionalProperties = ctx.enterPath(
       ['additionalProperties'],

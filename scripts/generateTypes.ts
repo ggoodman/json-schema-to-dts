@@ -6,7 +6,9 @@ async function main() {
   const schemaPath = Path.resolve(__dirname, './json-schema-draft-07.json');
   const schemaData = await Fs.readFile(schemaPath, 'utf-8');
   const schema = JSON.parse(schemaData);
-  const parser = new Parser();
+  const parser = new Parser({
+    defaultUnknownPropertiesSchema: true,
+  });
 
   parser.addSchema(`file://${schemaPath}`, schema);
 

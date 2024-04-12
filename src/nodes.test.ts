@@ -12,15 +12,15 @@ describe('SchemaNode', () => {
 
     expect(node.provideDocs({ emitSeeDirective: false })).toMatchInlineSnapshot(`undefined`);
     expect(node.provideDocs({ emitSeeDirective: true })).toMatchInlineSnapshot(`
-      Object {
-        "description": "",
-        "tags": Array [
-          Object {
-            "tagName": "see",
-            "text": "file://path",
-          },
-        ],
-      }
-    `);
+{
+  "description": "",
+  "tags": [
+    {
+      "tagName": "see",
+      "text": "file://path",
+    },
+  ],
+}
+`);
   });
 });
