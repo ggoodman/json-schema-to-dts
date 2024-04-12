@@ -29,7 +29,9 @@
     "typescript": "^5.4.5"
   },
   "scripts": {
-    "build": "npx esbuild --bundle --tree-shaking=true --outfile=dist/index.js --platform=node src/index.ts",
+    "build:dts": "npx tsc --emitDeclarationOnly --sourceMap false",
+    "build:js": "npx esbuild --bundle --tree-shaking=true --outfile=dist/index.js --platform=node src/index.ts",
+    "build": "npm run build:js && npm run build:dts",
     "generate": "ts-node ./scripts/generateTypes.ts",
     "lint": "prettier --check src/**/*",
     "test": "jest --verbose",
